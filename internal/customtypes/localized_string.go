@@ -20,7 +20,9 @@ import (
 var reLocalizedStringKey = regexp.MustCompile("^[a-z]{2}(-[A-Z]{2})?$")
 
 type LocalizedStringOpts struct {
-	Optional bool
+	Optional            bool
+	Description         string
+	MarkdownDescription string
 }
 
 type LocalizedStringType struct {
@@ -41,8 +43,11 @@ type LocalizedStringValue struct {
 
 func LocalizedString(opts LocalizedStringOpts) schema.MapAttribute {
 	attr := schema.MapAttribute{
-		Optional:   opts.Optional,
-		CustomType: NewLocalizedStringType(),
+		Optional:            opts.Optional,
+		Required:            !opts.Optional,
+		Description:         opts.Description,
+		MarkdownDescription: opts.MarkdownDescription,
+		CustomType:          NewLocalizedStringType(),
 		Validators: []validator.Map{
 			mapvalidator.KeysAre(
 				stringvalidator.RegexMatches(
