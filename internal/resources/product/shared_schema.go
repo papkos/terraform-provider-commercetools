@@ -2,13 +2,16 @@ package product
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
+	"github.com/labd/terraform-provider-commercetools/internal/customvalidator"
 )
 
 func productDataSchema(description string) schema.Block {
@@ -76,10 +79,16 @@ func productDataSchema(description string) schema.Block {
 						listvalidator.SizeAtMost(1),
 					},
 				},
-				//"variant": schema.SetNestedBlock{
-				//	Description:  "Additional Product Variants.",
-				//	NestedObject: productVariantSchema(),
-				//},
+				"variant": schema.ListNestedBlock{
+					Description:  "Additional Product Variants.",
+					NestedObject: productVariantSchema(),
+					Validators: []validator.List{
+						customvalidator.UniqueValuesFunc(func(variant attr.Value) attr.Value {
+							// 🤮
+							return variant.(basetypes.ObjectValue).Attributes()["sku"]
+						}),
+					},
+				},
 			},
 			CustomType:    nil,
 			Validators:    nil,

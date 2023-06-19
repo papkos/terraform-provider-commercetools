@@ -75,9 +75,9 @@ type ProductData struct {
 	MetaTitle       customtypes.LocalizedStringValue `tfsdk:"meta_title"`
 	MetaDescription customtypes.LocalizedStringValue `tfsdk:"meta_description"`
 	MetaKeywords    customtypes.LocalizedStringValue `tfsdk:"meta_keywords"`
-	MasterVariant   []ProductVariant                 `tfsdk:"master_variant"` // of ProductVariant
+	MasterVariant   []ProductVariant                 `tfsdk:"master_variant"`
+	Variants        []ProductVariant                 `tfsdk:"variant"`
 	// TODO CategoryOrderHints
-	// TODO variants
 	// TODO searchKeywords
 }
 
@@ -91,6 +91,7 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 		MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
 		MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
 		MasterVariant:   []ProductVariant{NewProductVariant(n.MasterVariant)},
+		Variants:        pie.Map(n.Variants, NewProductVariant),
 	}
 
 	// If the categories is empty we want to keep the value as null and not an empty
@@ -135,12 +136,14 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 		MetaDescription:    productData.MetaDescription.ValueLocalizedStringRef(),
 		MetaKeywords:       productData.MetaKeywords.ValueLocalizedStringRef(),
 		MasterVariant:      utils.Ref(productData.MasterVariant[0].draft(ctx)),
-		Variants:           nil,
-		TaxCategory:        &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()},
-		SearchKeywords:     nil,
-		State:              nil,
-		Publish:            p.MasterData[0].Published.ValueBoolPointer(),
-		PriceMode:          utils.Ref(platform.ProductPriceModeEnum(p.PriceMode.ValueString())),
+		Variants: pie.Map(productData.Variants, func(variant ProductVariant) platform.ProductVariantDraft {
+			return variant.draft(ctx)
+		}),
+		TaxCategory:    &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()},
+		SearchKeywords: nil,
+		State:          nil,
+		Publish:        p.MasterData[0].Published.ValueBoolPointer(),
+		PriceMode:      utils.Ref(platform.ProductPriceModeEnum(p.PriceMode.ValueString())),
 	}
 
 }
