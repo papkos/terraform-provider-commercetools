@@ -65,7 +65,22 @@ func productDataSchema(description string) schema.Block {
 				// TODO variants is a list of productVariants -- use references?
 				// TODO searchKeywords is required, but it is just a JSON (with schema) https://docs.commercetools.com/api/projects/products#productdata
 			},
-			Blocks:        nil,
+			Blocks: map[string]schema.Block{
+				"master_variant": schema.ListNestedBlock{
+					// These items all have maximal one item. We don't use SingleNestedBlock
+					// here since it isn't quite robust currently.
+					// See https://github.com/hashicorp/terraform-plugin-framework/issues/603
+					Description:  "The Master Variant of the Product.",
+					NestedObject: productVariantSchema(),
+					Validators: []validator.List{
+						listvalidator.SizeAtMost(1),
+					},
+				},
+				//"variant": schema.SetNestedBlock{
+				//	Description:  "Additional Product Variants.",
+				//	NestedObject: productVariantSchema(),
+				//},
+			},
 			CustomType:    nil,
 			Validators:    nil,
 			PlanModifiers: nil,

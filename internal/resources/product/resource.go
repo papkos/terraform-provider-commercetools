@@ -150,7 +150,7 @@ func (r *productResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	draft := plan.draft()
+	draft := plan.draft(ctx)
 	var product *platform.Product
 
 	err := retry.RetryContext(ctx, 20*time.Second, func() *retry.RetryError {

@@ -75,8 +75,8 @@ type ProductData struct {
 	MetaTitle       customtypes.LocalizedStringValue `tfsdk:"meta_title"`
 	MetaDescription customtypes.LocalizedStringValue `tfsdk:"meta_description"`
 	MetaKeywords    customtypes.LocalizedStringValue `tfsdk:"meta_keywords"`
+	MasterVariant   []ProductVariant                 `tfsdk:"master_variant"` // of ProductVariant
 	// TODO CategoryOrderHints
-	// TODO masterVariant
 	// TODO variants
 	// TODO searchKeywords
 }
@@ -90,6 +90,7 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 		MetaTitle:       utils.FromOptionalLocalizedString(n.MetaTitle),
 		MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
 		MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
+		MasterVariant:   []ProductVariant{NewProductVariant(n.MasterVariant)},
 	}
 
 	// If the categories is empty we want to keep the value as null and not an empty
@@ -103,11 +104,13 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 			panic(fmt.Sprintf("Failed to convert categories list: %s", diagnostic.Errors()))
 		}
 	}
+
 	return res
 }
 
-func (p Product) draft() platform.ProductDraft {
+func (p Product) draft(ctx context.Context) platform.ProductDraft {
 	productData := p.MasterData[0].Current[0]
+
 	return platform.ProductDraft{
 		// TODO Is it OK to read the MasterData.Current ?
 		ProductType: platform.ProductTypeResourceIdentifier{ID: p.ProductType.ValueStringPointer()},
@@ -116,7 +119,7 @@ func (p Product) draft() platform.ProductDraft {
 		Key:         p.Key.ValueStringPointer(),
 		Description: productData.Description.ValueLocalizedStringRef(),
 		Categories: pie.Map(productData.Categories.Elements(), func(catString attr.Value) platform.CategoryResourceIdentifier {
-			value, err := catString.ToTerraformValue(context.TODO())
+			value, err := catString.ToTerraformValue(ctx)
 			if err != nil {
 				return platform.CategoryResourceIdentifier{}
 			}
@@ -131,7 +134,7 @@ func (p Product) draft() platform.ProductDraft {
 		MetaTitle:          productData.MetaTitle.ValueLocalizedStringRef(),
 		MetaDescription:    productData.MetaDescription.ValueLocalizedStringRef(),
 		MetaKeywords:       productData.MetaKeywords.ValueLocalizedStringRef(),
-		MasterVariant:      nil,
+		MasterVariant:      utils.Ref(productData.MasterVariant[0].draft(ctx)),
 		Variants:           nil,
 		TaxCategory:        &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()},
 		SearchKeywords:     nil,
@@ -139,6 +142,7 @@ func (p Product) draft() platform.ProductDraft {
 		Publish:            p.MasterData[0].Published.ValueBoolPointer(),
 		PriceMode:          utils.Ref(platform.ProductPriceModeEnum(p.PriceMode.ValueString())),
 	}
+
 }
 
 func (p Product) updateActions(plan Product) platform.ProductUpdate {
