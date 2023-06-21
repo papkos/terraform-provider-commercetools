@@ -135,3 +135,13 @@ func (l LocalizedStringValue) ValueLocalizedStringRef() *platform.LocalizedStrin
 	v := l.ValueLocalizedString()
 	return &v
 }
+
+func (l LocalizedStringValue) Equal(o attr.Value) bool {
+	other, ok := o.(LocalizedStringValue)
+
+	if !ok {
+		return false
+	}
+
+	return l.Map.Equal(other.Map)
+}
