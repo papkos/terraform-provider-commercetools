@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/elliotchance/pie/v2"
@@ -53,6 +54,27 @@ func NewProductVariantPriceFromNative(n platform.Price) ProductVariantPrice {
 	}
 }
 
+func (price ProductVariantPrice) ToNative() platform.PriceDraft {
+	validFrom, err := parseDateTime(price.ValidFrom.ValueStringPointer())
+	if err != nil {
+		// TODO How to signal error?
+		return platform.PriceDraft{}
+	}
+
+	validUntil, err := parseDateTime(price.ValidUntil.ValueStringPointer())
+	if err != nil {
+		// TODO How to signal error?
+		return platform.PriceDraft{}
+	}
+	return platform.PriceDraft{
+		Key:        price.Key.ValueStringPointer(),
+		Value:      price.Value[0].ToNative(),
+		Country:    price.Country.ValueStringPointer(),
+		ValidFrom:  validFrom,
+		ValidUntil: validUntil,
+	}
+}
+
 //goland:noinspection GoNameStartsWithPackageName
 type ProductVariantAttribute struct {
 	Name types.String `tfsdk:"name"`
@@ -95,7 +117,27 @@ func NewProductVariantAttributeFromNative(n platform.Attribute) ProductVariantAt
 	return pva
 }
 
-func (pv ProductVariant) draft(ctx context.Context) platform.ProductVariantDraft {
+func (pva ProductVariantAttribute) ToNative() platform.Attribute {
+	attribute := platform.Attribute{
+		Name: pva.Name.ValueString(),
+	}
+
+	switch {
+	case !pva.BoolValue.IsNull():
+		attribute.Value = pva.BoolValue.ValueBool()
+	case !pva.TextValue.IsNull():
+		attribute.Value = pva.TextValue.ValueString()
+	case !pva.LocalizedTextValue.IsNull():
+		attribute.Value = pva.LocalizedTextValue.ValueLocalizedString()
+	case !pva.PTReferenceValue.IsNull():
+		attribute.Value = platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
+	}
+
+	return attribute
+}
+
+// Same as draftAddNew, but uses a different type, and lacks a field: Staged
+func (pv ProductVariant) draftCreate(ctx context.Context) platform.ProductVariantDraft {
 	ret := platform.ProductVariantDraft{
 		Sku:        pv.SKU.ValueStringPointer(),
 		Key:        pv.Key.ValueStringPointer(),
@@ -104,46 +146,101 @@ func (pv ProductVariant) draft(ctx context.Context) platform.ProductVariantDraft
 	}
 
 	if len(pv.Attributes) > 0 {
-		ret.Attributes = pie.Map(pv.Attributes, func(pva ProductVariantAttribute) platform.Attribute {
-			attribute := platform.Attribute{
-				Name: pva.Name.ValueString(),
-			}
-
-			switch {
-			case !pva.BoolValue.IsNull():
-				attribute.Value = pva.BoolValue.ValueBool()
-			case !pva.TextValue.IsNull():
-				attribute.Value = pva.TextValue.ValueString()
-			case !pva.LocalizedTextValue.IsNull():
-				attribute.Value = pva.LocalizedTextValue.ValueLocalizedString()
-			case !pva.PTReferenceValue.IsNull():
-				attribute.Value = platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
-			}
-
-			return attribute
-		})
+		ret.Attributes = pie.Map(pv.Attributes, ProductVariantAttribute.ToNative)
 	}
 
 	if len(pv.Prices) > 0 {
-		ret.Prices = pie.Map(pv.Prices, func(price ProductVariantPrice) platform.PriceDraft {
-			validFrom, err := parseDateTime(price.ValidFrom.ValueStringPointer())
-			if err != nil {
-				// TODO How to signal error?
-				return platform.PriceDraft{}
-			}
+		ret.Prices = pie.Map(pv.Prices, ProductVariantPrice.ToNative)
+	}
 
-			validUntil, err := parseDateTime(price.ValidUntil.ValueStringPointer())
-			if err != nil {
-				// TODO How to signal error?
-				return platform.PriceDraft{}
-			}
-			return platform.PriceDraft{
-				Key:        price.Key.ValueStringPointer(),
-				Value:      price.Value[0].ToNative(),
-				Country:    price.Country.ValueStringPointer(),
-				ValidFrom:  validFrom,
-				ValidUntil: validUntil,
-			}
+	return ret
+}
+
+// Same as draftCreate, but uses a different type, and has an extra field: Staged
+func (pv ProductVariant) draftAddNew(ctx context.Context) platform.ProductAddVariantAction {
+	ret := platform.ProductAddVariantAction{
+		Sku:        pv.SKU.ValueStringPointer(),
+		Key:        pv.Key.ValueStringPointer(),
+		Prices:     nil,
+		Attributes: nil,
+		// If true, only the staged description is updated. If false, both the current and staged description are updated.
+		// Default: true
+		Staged: utils.Ref(false),
+	}
+
+	if len(pv.Attributes) > 0 {
+		ret.Attributes = pie.Map(pv.Attributes, ProductVariantAttribute.ToNative)
+	}
+
+	if len(pv.Prices) > 0 {
+		ret.Prices = pie.Map(pv.Prices, ProductVariantPrice.ToNative)
+	}
+
+	return ret
+}
+
+func (pv ProductVariant) calculateUpdateActions(plan ProductVariant) []platform.ProductUpdateAction {
+	var ret []platform.ProductUpdateAction
+
+	// Variant-related actions
+	// Ref: https://docs.commercetools.com/api/projects/products#update-actions
+
+	// setSku
+	if !pv.SKU.Equal(plan.SKU) {
+		var value *string
+		if !plan.SKU.IsNull() && !plan.SKU.IsUnknown() {
+			value = plan.SKU.ValueStringPointer()
+		}
+		ret = append(ret, platform.ProductSetSkuAction{
+			VariantId: int(pv.ID.ValueInt64()),
+			Sku:       value,
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setPrices
+	// Trying to get away cheap, instead of only changing what actually changed (comparing prices by their ID),
+	// see if there's any difference, and completely replace all the prices
+	if !reflect.DeepEqual(pv.Prices, plan.Prices) {
+		ret = append(ret, platform.ProductSetPricesAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Prices:    pie.Map(plan.Prices, ProductVariantPrice.ToNative),
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setAttribute
+	// Attributes can be added, removed or changed. There is no "setAttributes" action that would replace all at once.
+	stateAttributesByName := map[string]ProductVariantAttribute{}
+	for _, sa := range pv.Attributes {
+		stateAttributesByName[sa.Name.ValueString()] = sa
+	}
+
+	for _, pa := range plan.Attributes {
+		ret = append(ret, platform.ProductSetAttributeAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Name:      pa.Name.ValueString(),
+			Value:     pa.ToNative(),
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+		delete(stateAttributesByName, pa.Name.ValueString())
+	}
+
+	// The ones left in this map are not part of the plan, thus need to be removed
+	for _, sa := range stateAttributesByName {
+		ret = append(ret, platform.ProductSetAttributeAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Name:      sa.Name.ValueString(),
+			Value:     nil, // Nil removes the value
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
 		})
 	}
 

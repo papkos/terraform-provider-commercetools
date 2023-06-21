@@ -135,9 +135,9 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 		MetaTitle:          productData.MetaTitle.ValueLocalizedStringRef(),
 		MetaDescription:    productData.MetaDescription.ValueLocalizedStringRef(),
 		MetaKeywords:       productData.MetaKeywords.ValueLocalizedStringRef(),
-		MasterVariant:      utils.Ref(productData.MasterVariant[0].draft(ctx)),
+		MasterVariant:      utils.Ref(productData.MasterVariant[0].draftCreate(ctx)),
 		Variants: pie.Map(productData.Variants, func(variant ProductVariant) platform.ProductVariantDraft {
-			return variant.draft(ctx)
+			return variant.draftCreate(ctx)
 		}),
 		TaxCategory:    &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()},
 		SearchKeywords: nil,
@@ -148,7 +148,7 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 
 }
 
-func (p Product) calculateUpdateActions(plan Product) platform.ProductUpdate {
+func (p Product) calculateUpdateActions(ctx context.Context, plan Product) platform.ProductUpdate {
 	result := platform.ProductUpdate{
 		Version: int(p.Version.ValueInt64()),
 		Actions: []platform.ProductUpdateAction{},
@@ -232,6 +232,39 @@ func (p Product) calculateUpdateActions(plan Product) platform.ProductUpdate {
 		} else {
 			result.Actions = append(result.Actions, platform.ProductUnpublishAction{})
 		}
+	}
+
+	// Check the master variant
+
+	stateMasterVariant := p.MasterData[0].Current[0].MasterVariant[0]
+	planMasterVariant := plan.MasterData[0].Current[0].MasterVariant[0]
+	result.Actions = append(result.Actions, stateMasterVariant.calculateUpdateActions(planMasterVariant)...)
+
+	// Extra variants
+	// Variants can be added, removed or changed.
+	stateVariantsById := map[int64]ProductVariant{}
+	for _, sv := range p.MasterData[0].Current[0].Variants {
+		stateVariantsById[sv.ID.ValueInt64()] = sv
+	}
+
+	for _, pv := range plan.MasterData[0].Current[0].Variants {
+		sv, ok := stateVariantsById[pv.ID.ValueInt64()]
+		if !ok {
+			result.Actions = append(result.Actions, pv.draftAddNew(ctx))
+		} else {
+			result.Actions = append(result.Actions, pv.calculateUpdateActions(sv)...)
+			delete(stateVariantsById, sv.ID.ValueInt64())
+		}
+	}
+
+	// The ones left in this map are not part of the plan, thus need to be removed
+	for _, sv := range stateVariantsById {
+		result.Actions = append(result.Actions, platform.ProductRemoveVariantAction{
+			ID: utils.Ref(int(sv.ID.ValueInt64())),
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
 	}
 
 	return result
