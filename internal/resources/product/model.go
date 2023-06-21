@@ -148,7 +148,7 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 
 }
 
-func (p Product) updateActions(plan Product) platform.ProductUpdate {
+func (p Product) calculateUpdateActions(plan Product) platform.ProductUpdate {
 	result := platform.ProductUpdate{
 		Version: int(p.Version.ValueInt64()),
 		Actions: []platform.ProductUpdateAction{},

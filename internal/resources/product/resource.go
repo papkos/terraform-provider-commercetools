@@ -225,7 +225,7 @@ func (r *productResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	input := state.updateActions(plan)
+	input := state.calculateUpdateActions(plan)
 	var product *platform.Product
 
 	err := retry.RetryContext(ctx, 5*time.Second, func() *retry.RetryError {

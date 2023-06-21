@@ -13,21 +13,30 @@ func TestAccProduct_basic(t *testing.T) {
 	name := "TF ACC test product"
 	key := "tf-acctest-product"
 	resourceName := "commercetools_product.tf-acctest-product"
+
+	step1Config := testAccProductConfig(productConfig{
+		ProductType: testAccProductTypeConfigSimple(),
+		TaxCategory: testAccTaxCategoryConfig(),
+		Key:         key,
+		Name:        name,
+		Variants: []variantConfig{
+			{
+				Sku: "tf-testacc-sku1",
+				Prices: []priceConfig{
+					{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
+					{Curr: "NOK", Val: 2000, Country: "NO"},
+				},
+			},
+		},
+	})
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.TestAccPreCheck(t) },
 		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
 		CheckDestroy:             testAccCheckProductDestroy,
+
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProductConfig(t, testAccProductTypeConfigSimple(t), name, key, []variantConfig{
-					{
-						Sku: "tf-testacc-sku1",
-						Prices: []priceConfig{
-							{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
-							{Curr: "NOK", Val: 2000, Country: "NO"},
-						},
-					},
-				}),
+				Config: step1Config,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "key", key),
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.name.en", name),

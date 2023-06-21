@@ -16,18 +16,25 @@ func TestAccProduct_attributes(t *testing.T) {
 	name := "TF ACC test product"
 	key := "tf-acctest-product"
 	resourceName := "commercetools_product.tf-acctest-product"
-	productTypeConfigWithAttributes := testAccProductTypeConfigWithAttributes(t)
-	step1Config := testAccProductConfig(t, productTypeConfigWithAttributes, name, key, []variantConfig{
-		{
-			Sku: "tf-testacc-sku1",
-			Prices: []priceConfig{
-				{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
-				{Curr: "NOK", Val: 2000, Country: "NO"},
-			},
-			Attributes: []product.ProductVariantAttribute{
-				{Name: types.StringValue("bool_attr_name"), BoolValue: types.BoolValue(true)},
-				{Name: types.StringValue("text_attr_name"), TextValue: types.StringValue("text attribute value")},
-				{Name: types.StringValue("pt_ref_attr_name"), PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Name))}, // These probably should be UUIDs...
+	productTypeConfigWithAttributes := testAccProductTypeConfigWithAttributes()
+
+	step1Config := testAccProductConfig(productConfig{
+		ProductType: productTypeConfigWithAttributes,
+		TaxCategory: testAccTaxCategoryConfig(),
+		Key:         key,
+		Name:        name,
+		Variants: []variantConfig{
+			{
+				Sku: "tf-testacc-sku1",
+				Prices: []priceConfig{
+					{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
+					{Curr: "NOK", Val: 2000, Country: "NO"},
+				},
+				Attributes: []product.ProductVariantAttribute{
+					{Name: types.StringValue("bool_attr_name"), BoolValue: types.BoolValue(true)},
+					{Name: types.StringValue("text_attr_name"), TextValue: types.StringValue("text attribute value")},
+					{Name: types.StringValue("pt_ref_attr_name"), PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Key))}, // These probably should be UUIDs...
+				},
 			},
 		},
 	})
@@ -38,9 +45,6 @@ func TestAccProduct_attributes(t *testing.T) {
 
 		Steps: []resource.TestStep{
 			{
-				PreConfig: func() {
-
-				},
 				Config: step1Config,
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "key", key),
