@@ -154,7 +154,85 @@ func (p Product) calculateUpdateActions(plan Product) platform.ProductUpdate {
 		Actions: []platform.ProductUpdateAction{},
 	}
 
-	// TODO Check diff & add actions
+	// Top-level property changes first, variants at the end.
+	// Ref: https://docs.commercetools.com/api/projects/products#update-actions
+
+	// setKey
+	// TODO shouldn't this be p.Key.Equal(plan.Key) ??
+	// 	It actually works as expected, i.e. if the underlying values are identical, we don't enter the if body. Why?
+	if p.Key != plan.Key {
+		var value *string
+		if !plan.Key.IsNull() && !plan.Key.IsUnknown() {
+			value = plan.Key.ValueStringPointer()
+		}
+		result.Actions = append(result.Actions, platform.ProductSetKeyAction{Key: value})
+	}
+
+	// changeName
+	if !p.MasterData[0].Current[0].Name.Equal(plan.MasterData[0].Current[0].Name) {
+		var planValue = plan.MasterData[0].Current[0].Name
+		result.Actions = append(result.Actions, platform.ProductChangeNameAction{
+			Name: planValue.ValueLocalizedString(), // Unknown & Null is nil, but that is invalid and the schema should have prevented it
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setDescription
+	if !p.MasterData[0].Current[0].Description.Equal(plan.MasterData[0].Current[0].Description) {
+		var planValue = plan.MasterData[0].Current[0].Description
+		result.Actions = append(result.Actions, platform.ProductSetDescriptionAction{
+			Description: planValue.ValueLocalizedStringRef(), // Unknown & Null is nil
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// changeSlug
+	if !p.MasterData[0].Current[0].Slug.Equal(plan.MasterData[0].Current[0].Slug) {
+		var planValue = plan.MasterData[0].Current[0].Slug
+		result.Actions = append(result.Actions, platform.ProductChangeSlugAction{
+			Slug: planValue.ValueLocalizedString(), // Unknown & Null is nil, but that is invalid and the schema should have prevented it
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setPriceMode
+	if p.PriceMode != plan.PriceMode {
+		var value *platform.ProductPriceModeEnum
+		if !plan.PriceMode.IsNull() && !plan.PriceMode.IsUnknown() {
+			value = (*platform.ProductPriceModeEnum)(plan.PriceMode.ValueStringPointer())
+		}
+		result.Actions = append(result.Actions, platform.ProductSetPriceModeAction{PriceMode: value})
+	}
+
+	// setTaxCategory
+	if p.TaxCategory != plan.TaxCategory {
+		var value *string
+		if !plan.TaxCategory.IsNull() && !plan.TaxCategory.IsUnknown() {
+			value = plan.TaxCategory.ValueStringPointer()
+		}
+		result.Actions = append(result.Actions, platform.ProductSetTaxCategoryAction{
+			TaxCategory: &platform.TaxCategoryResourceIdentifier{ID: value},
+		})
+	}
+
+	// publish/unpublish
+	if !p.MasterData[0].Published.Equal(plan.MasterData[0].Published) {
+		value := plan.MasterData[0].Published.ValueBool()
+
+		if value {
+			result.Actions = append(result.Actions, platform.ProductPublishAction{
+				Scope: utils.Ref(platform.ProductPublishScopeAll),
+			})
+		} else {
+			result.Actions = append(result.Actions, platform.ProductUnpublishAction{})
+		}
+	}
 
 	return result
 }
