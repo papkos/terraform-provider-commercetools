@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
+	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
 	"github.com/labd/terraform-provider-commercetools/internal/customvalidator"
 )
 
@@ -30,27 +31,46 @@ func productVariantSchema() schema.NestedBlockObject {
 			},
 		},
 		Blocks: map[string]schema.Block{
-			//"attribute": schema.SetNestedBlock{
-			//	Description: "Attributes of the Product Variant.",
-			//	NestedObject: schema.NestedBlockObject{
-			//		Attributes: map[string]schema.Attribute{
-			//			"name": schema.StringAttribute{
-			//				Description: "Name of the Attribute.",
-			//				Required:    true,
-			//			},
-			//			"value": schema.StringAttribute{
-			//				Description: "The value of the attribute",
-			//				Required:    true,
-			//				// TODO this should be a complex type https://docs.commercetools.com/api/projects/products#attribute
-			//			},
-			//		},
-			//		CustomType:    nil,
-			//		Validators:    nil,
-			//		PlanModifiers: nil,
-			//	},
-			//	Validators:    nil,
-			//	PlanModifiers: nil,
-			//},
+			"attribute": schema.SetNestedBlock{
+				Description: "Attributes of the Product Variant.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Description: "Name of the Attribute.",
+							Required:    true,
+						},
+						"bool_value": schema.BoolAttribute{
+							Optional:    true,
+							Description: "Use this to provide value to bool type attribute",
+						},
+						"text_value": schema.StringAttribute{
+							Optional:    true,
+							Description: "Use this to provide value to text type attribute",
+						},
+						"localized_text_value": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
+							Optional:    true,
+							Description: "Use this to provide value to localized text type attribute",
+						}),
+						"product_type_reference_value": schema.StringAttribute{
+							Optional:    true,
+							Description: "Use this to provide value to Product Type reference type attribute",
+						},
+						// There are more, to be implemented: https://docs.commercetools.com/api/projects/products#attribute
+					},
+					Validators: []validator.Object{
+						// TODO This should be on each attribute, but that's insane... Is there a validator that validates an object's attributes?
+						//objectvalidator.ExactlyOneOf(
+						//	path.MatchRoot("bool_value"),
+						//	path.MatchRoot("text_value"),
+						//	path.MatchRoot("localized_text_value"),
+						//	path.MatchRoot("product_type_reference_value"),
+						//),
+					},
+					PlanModifiers: nil,
+				},
+				Validators:    nil,
+				PlanModifiers: nil,
+			},
 			"price": schema.ListNestedBlock{
 				Description: "The Embedded Prices for the Product Variant. " +
 					"Each Price must have its unique Price scope " +

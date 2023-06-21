@@ -6,29 +6,29 @@ import (
 	"time"
 
 	"github.com/elliotchance/pie/v2"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/labd/commercetools-go-sdk/platform"
 
 	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
+	"github.com/labd/terraform-provider-commercetools/internal/utils"
 )
 
 //goland:noinspection GoNameStartsWithPackageName
 type ProductVariant struct {
-	ID     types.Int64           `tfsdk:"id"`
-	Key    types.String          `tfsdk:"key"`
-	SKU    types.String          `tfsdk:"sku"`
-	Prices []ProductVariantPrice `tfsdk:"price"` // of ProductVariantPrice
-	//Attributes types.Set             `tfsdk:"attribute"` // of ProductVariantAttribute
+	ID         types.Int64               `tfsdk:"id"`
+	Key        types.String              `tfsdk:"key"`
+	SKU        types.String              `tfsdk:"sku"`
+	Prices     []ProductVariantPrice     `tfsdk:"price"`     // of ProductVariantPrice
+	Attributes []ProductVariantAttribute `tfsdk:"attribute"` // of ProductVariantAttribute
 }
 
 func NewProductVariant(n platform.ProductVariant) ProductVariant {
 	return ProductVariant{
-		ID:     types.Int64Value(int64(n.ID)),
-		Key:    types.StringPointerValue(n.Key),
-		SKU:    types.StringPointerValue(n.Sku),
-		Prices: pie.Map(n.Prices, NewProductVariantPrice),
-		// Attributes: , // TODO
+		ID:         types.Int64Value(int64(n.ID)),
+		Key:        types.StringPointerValue(n.Key),
+		SKU:        types.StringPointerValue(n.Sku),
+		Prices:     pie.Map(n.Prices, NewProductVariantPrice),
+		Attributes: pie.Map(n.Attributes, NewProductVariantAttributeFromNative),
 	}
 }
 
@@ -55,15 +55,44 @@ func NewProductVariantPrice(n platform.Price) ProductVariantPrice {
 
 //goland:noinspection GoNameStartsWithPackageName
 type ProductVariantAttribute struct {
-	Name  types.String `tfsdk:"key"`
-	Value types.String `tfsdk:"value"` // TODO this should be a complex type https://docs.commercetools.com/api/projects/products#attribute
+	Name types.String `tfsdk:"name"`
+
+	BoolValue          types.Bool                       `tfsdk:"bool_value"`
+	TextValue          types.String                     `tfsdk:"text_value"`
+	LocalizedTextValue customtypes.LocalizedStringValue `tfsdk:"localized_text_value"`
+	PTReferenceValue   types.String                     `tfsdk:"product_type_reference_value"`
 }
 
-func NewProductVariantAttributeFromNative(n platform.AttributeNestedType) ProductVariantAttribute {
-	return ProductVariantAttribute{
-		Name:  types.StringValue("TODO this is a hardcoded product variant attribute name"),  // TODO
-		Value: types.StringValue("TODO this is a hardcoded product variant attribute value"), // TODO
+func NewProductVariantAttributeFromNative(n platform.Attribute) ProductVariantAttribute {
+	pva := ProductVariantAttribute{
+		Name: types.StringValue(n.Name),
+
+		// Initialize to respective null values
+		BoolValue:          types.BoolNull(),
+		TextValue:          types.StringNull(),
+		LocalizedTextValue: customtypes.NewLocalizedStringNull(),
+		PTReferenceValue:   types.StringNull(),
 	}
+
+	switch val := n.Value.(type) {
+	case bool:
+		pva.BoolValue = types.BoolValue(val)
+	case string:
+		pva.TextValue = types.StringValue(val)
+	case platform.LocalizedString:
+		pva.LocalizedTextValue = utils.FromLocalizedString(val)
+
+	// Complex value, dig deeper
+	case map[string]any:
+		if typeId, ok := val["typeId"]; ok {
+			// Probably a "reference" value, check what type it is referencing & set the relevant field
+			switch typeId {
+			case "product-type":
+				pva.PTReferenceValue = types.StringValue(val["id"].(string))
+			}
+		}
+	}
+	return pva
 }
 
 func (pv ProductVariant) draft(ctx context.Context) platform.ProductVariantDraft {
@@ -74,19 +103,26 @@ func (pv ProductVariant) draft(ctx context.Context) platform.ProductVariantDraft
 		Attributes: nil,
 	}
 
-	//if len(pv.Attributes.Elements()) > 0 {
-	//	ret.Attributes = pie.Map(pv.Attributes.Elements(), func(attr attr.Value) platform.Attribute {
-	//		var pva ProductVariantAttribute
-	//		err := tfAttrAs(attr, &pva)
-	//		if err != nil {
-	//			return platform.Attribute{}
-	//		}
-	//		return platform.Attribute{
-	//			Name:  pva.Name.ValueString(),
-	//			Value: pva.Value.ValueString(),
-	//		}
-	//	})
-	//}
+	if len(pv.Attributes) > 0 {
+		ret.Attributes = pie.Map(pv.Attributes, func(pva ProductVariantAttribute) platform.Attribute {
+			attribute := platform.Attribute{
+				Name: pva.Name.ValueString(),
+			}
+
+			switch {
+			case !pva.BoolValue.IsNull():
+				attribute.Value = pva.BoolValue.ValueBool()
+			case !pva.TextValue.IsNull():
+				attribute.Value = pva.TextValue.ValueString()
+			case !pva.LocalizedTextValue.IsNull():
+				attribute.Value = pva.LocalizedTextValue.ValueLocalizedString()
+			case !pva.PTReferenceValue.IsNull():
+				attribute.Value = platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
+			}
+
+			return attribute
+		})
+	}
 
 	if len(pv.Prices) > 0 {
 		ret.Prices = pie.Map(pv.Prices, func(price ProductVariantPrice) platform.PriceDraft {
@@ -112,15 +148,6 @@ func (pv ProductVariant) draft(ctx context.Context) platform.ProductVariantDraft
 	}
 
 	return ret
-}
-
-func tfAttrAs(attr attr.Value, dst any) error {
-	tfVal, err := attr.ToTerraformValue(context.TODO())
-	if err != nil {
-		return err
-	}
-
-	return tfVal.As(dst)
 }
 
 func parseDateTime(s *string) (*time.Time, error) {
