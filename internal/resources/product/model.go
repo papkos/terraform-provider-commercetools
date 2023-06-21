@@ -90,8 +90,8 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 		MetaTitle:       utils.FromOptionalLocalizedString(n.MetaTitle),
 		MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
 		MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
-		MasterVariant:   []ProductVariant{NewProductVariant(n.MasterVariant)},
-		Variants:        pie.Map(n.Variants, NewProductVariant),
+		MasterVariant:   []ProductVariant{NewProductVariantFromNative(n.MasterVariant)},
+		Variants:        pie.Map(n.Variants, NewProductVariantFromNative),
 	}
 
 	// If the categories is empty we want to keep the value as null and not an empty

@@ -22,12 +22,12 @@ type ProductVariant struct {
 	Attributes []ProductVariantAttribute `tfsdk:"attribute"` // of ProductVariantAttribute
 }
 
-func NewProductVariant(n platform.ProductVariant) ProductVariant {
+func NewProductVariantFromNative(n platform.ProductVariant) ProductVariant {
 	return ProductVariant{
 		ID:         types.Int64Value(int64(n.ID)),
 		Key:        types.StringPointerValue(n.Key),
 		SKU:        types.StringPointerValue(n.Sku),
-		Prices:     pie.Map(n.Prices, NewProductVariantPrice),
+		Prices:     pie.Map(n.Prices, NewProductVariantPriceFromNative),
 		Attributes: pie.Map(n.Attributes, NewProductVariantAttributeFromNative),
 	}
 }
@@ -42,7 +42,7 @@ type ProductVariantPrice struct {
 	ValidUntil types.String              `tfsdk:"valid_until"`
 }
 
-func NewProductVariantPrice(n platform.Price) ProductVariantPrice {
+func NewProductVariantPriceFromNative(n platform.Price) ProductVariantPrice {
 	return ProductVariantPrice{
 		ID:         types.StringValue(n.ID),
 		Key:        types.StringPointerValue(n.Key),
