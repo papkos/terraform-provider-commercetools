@@ -224,7 +224,7 @@ func (pv ProductVariant) calculateUpdateActions(plan ProductVariant) []platform.
 		ret = append(ret, platform.ProductSetAttributeAction{
 			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
 			Name:      pa.Name.ValueString(),
-			Value:     pa.ToNative(),
+			Value:     pa.ToNative().Value,
 			// If true, only the staged description is updated. If false, both the current and staged description are updated.
 			// Default: true
 			Staged: utils.Ref(false),
