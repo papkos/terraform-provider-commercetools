@@ -1,6 +1,7 @@
 package product_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -12,7 +13,7 @@ func TestAccProduct_multi_variant(t *testing.T) {
 
 	name := "TF ACC test product"
 	key := "tf-acctest-product"
-	resourceName := "commercetools_product.tf-acctest-product"
+	resourceName := fmt.Sprintf("commercetools_product.%s", key)
 
 	step1Config := testAccProductConfig(productConfig{
 		ProductType: testAccProductTypeConfigSimple(),

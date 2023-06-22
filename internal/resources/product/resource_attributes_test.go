@@ -15,7 +15,7 @@ func TestAccProduct_attributes(t *testing.T) {
 
 	name := "TF ACC test product"
 	key := "tf-acctest-product"
-	resourceName := "commercetools_product.tf-acctest-product"
+	resourceName := fmt.Sprintf("commercetools_product.%s", key)
 	productTypeConfigWithAttributes := testAccProductTypeConfigWithAttributes()
 
 	step1Config := testAccProductConfig(productConfig{

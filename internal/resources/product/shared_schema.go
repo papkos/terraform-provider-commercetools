@@ -48,9 +48,9 @@ func productDataSchema(description string) schema.Block {
 					Description:         "User-defined identifier used in a deep-link URL for the Product. Must be unique across a Project, but can be the same for Products in different Locales.",
 					MarkdownDescription: "",
 					// TODO make it possible to add (value) validators
-					//Validators: []validator.String{
+					// Validators: []validator.String{
 					//	stringvalidator.RegexMatches(regexp.MustCompile(`[a-zA-Z0-9_-]{2,256}`), ""),
-					//},
+					// },
 				}),
 				"meta_title": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
 					Optional:    true,
@@ -83,7 +83,7 @@ func productDataSchema(description string) schema.Block {
 					Description:  "Additional Product Variants.",
 					NestedObject: productVariantSchema(),
 					Validators: []validator.List{
-						customvalidator.UniqueValuesFunc(func(variant attr.Value) attr.Value {
+						customvalidator.UniqueValuesKeyFunc(func(variant attr.Value) attr.Value {
 							// 🤮
 							return variant.(basetypes.ObjectValue).Attributes()["sku"]
 						}),

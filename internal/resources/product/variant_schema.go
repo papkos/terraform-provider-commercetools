@@ -2,11 +2,14 @@ package product
 
 import (
 	"regexp"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
@@ -59,12 +62,12 @@ func productVariantSchema() schema.NestedBlockObject {
 					},
 					Validators: []validator.Object{
 						// TODO This should be on each attribute, but that's insane... Is there a validator that validates an object's attributes?
-						//objectvalidator.ExactlyOneOf(
+						// objectvalidator.ExactlyOneOf(
 						//	path.MatchRoot("bool_value"),
 						//	path.MatchRoot("text_value"),
 						//	path.MatchRoot("localized_text_value"),
 						//	path.MatchRoot("product_type_reference_value"),
-						//),
+						// ),
 					},
 					PlanModifiers: nil,
 				},
@@ -126,16 +129,97 @@ func productVariantSchema() schema.NestedBlockObject {
 									},
 								},
 							},
+							Validators: []validator.List{
+								listvalidator.SizeAtLeast(1),
+								listvalidator.SizeAtMost(1),
+							},
 						},
 					},
 				},
 				Validators: []validator.List{
-					customvalidator.UniqueValuesFunc(func(price attr.Value) attr.Value {
-						// 🤮
-						return price.(basetypes.ObjectValue).Attributes()["value"].(basetypes.ListValue).Elements()[0].(basetypes.ObjectValue).Attributes()["currency_code"]
-					}),
+					customvalidator.UniqueValuesCompareFunc(arePricesConflicting),
 				},
 			},
 		},
 	}
+}
+
+// As per the docs, all prices must have different scopes, where "scope" is defined as
+// currency, country, customer group, channel, valid from and valid until.
+// See more details at https://docs.commercetools.com/api/projects/products#add-price
+func arePricesConflicting(a, b attr.Value) bool {
+	if !getCurrencyCode(a).Equal(getCurrencyCode(b)) {
+		// Different currencies can't be equal
+		return false
+	}
+
+	if !getCountry(a).Equal(getCountry(b)) && !(getCountry(a).IsNull() && getCountry(b).IsNull()) {
+		// Different NON-NULL countries can't be equal
+		return false
+	}
+
+	validFromA := getValidFrom(a)
+	validUntilA := getValidUntil(a)
+	validFromB := getValidFrom(b)
+	validUntilB := getValidUntil(b)
+
+	// Common case: all are null --> prices are equal
+	if validFromA.IsNull() && validUntilA.IsNull() && validFromB.IsNull() && validUntilB.IsNull() {
+		return true
+	}
+
+	// Else we need to do an interval overlap check
+
+	minTime := time.Time{}
+	maxTime := time.Date(9999, 0, 0, 0, 0, 0, 0, time.UTC)
+
+	validFromATime, err := parseDateTime(validFromA.ValueStringPointer(), minTime)
+	if err != nil {
+		return false // Not a correct datetime
+	}
+
+	validUntilATime, err := parseDateTime(validUntilA.ValueStringPointer(), maxTime)
+	if err != nil {
+		return false // Not a correct datetime
+	}
+
+	validFromBTime, err := parseDateTime(validFromB.ValueStringPointer(), minTime)
+	if err != nil {
+		return false // Not a correct datetime
+	}
+
+	validUntilBTime, err := parseDateTime(validUntilB.ValueStringPointer(), maxTime)
+	if err != nil {
+		return false // Not a correct datetime
+	}
+
+	// "order" them
+	if (*validFromATime).Before(*validFromBTime) {
+		if (*validFromBTime).Before(*validUntilATime) {
+			// There is an overlap, signal equivalency
+			return true
+		}
+	} else {
+		if (*validFromATime).Before(*validUntilBTime) {
+			// There is an overlap, signal equivalency
+			return true
+		}
+	}
+
+	return false
+}
+
+func getCurrencyCode(price attr.Value) types.String {
+	return price.(basetypes.ObjectValue).Attributes()["value"].(basetypes.ListValue).Elements()[0].(basetypes.ObjectValue).Attributes()["currency_code"].(types.String)
+}
+func getCountry(price attr.Value) types.String {
+	return price.(basetypes.ObjectValue).Attributes()["country"].(types.String)
+}
+
+func getValidFrom(price attr.Value) types.String {
+	return price.(basetypes.ObjectValue).Attributes()["valid_from"].(types.String)
+}
+
+func getValidUntil(price attr.Value) types.String {
+	return price.(basetypes.ObjectValue).Attributes()["valid_until"].(types.String)
 }

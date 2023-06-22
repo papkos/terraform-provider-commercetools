@@ -247,9 +247,13 @@ func (pv ProductVariant) calculateUpdateActions(plan ProductVariant) []platform.
 	return ret
 }
 
-func parseDateTime(s *string) (*time.Time, error) {
+func parseDateTime(s *string, def ...time.Time) (*time.Time, error) {
 	if s == nil {
-		return nil, nil
+		if len(def) > 0 {
+			return &def[0], nil
+		} else {
+			return nil, nil
+		}
 	}
 
 	dt, err := time.Parse(time.RFC3339, *s)
