@@ -25,24 +25,5 @@ resource "commercetools_product" "{{ .Key }}" {
             }
             {{ end }}
         }
-        staged {
-            name = {
-                en = "{{ .Name }}"
-            }
-            slug = {
-                en = "{{ .Key }}"
-            }
-
-            master_variant {
-                {{ index .VariantConfigs 0 }}
-            }
-
-            {{- range $index, $element := slice .VariantConfigs 1 }}
-
-            variant {
-                {{ $element }}
-            }
-            {{ end }}
-        }
     }
 }

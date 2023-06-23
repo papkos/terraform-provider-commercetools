@@ -48,21 +48,19 @@ func NewProductFromNative(n platform.Product) Product {
 
 //goland:noinspection GoNameStartsWithPackageName
 type ProductCatalogData struct {
-	Published        types.Bool `tfsdk:"published"`
-	HasStagedChanges types.Bool `tfsdk:"has_staged_changes"`
+	Published types.Bool `tfsdk:"published"`
 	// These items all have maximal one item. We don't use SingleNestedBlock
 	// here since it isn't quite robust currently.
 	// See https://github.com/hashicorp/terraform-plugin-framework/issues/603
 	Current []ProductData `tfsdk:"current"`
-	Staged  []ProductData `tfsdk:"staged"`
+
+	// We don't care about Staged data
 }
 
 func NewProductCatalogDataFromNative(n platform.ProductCatalogData) ProductCatalogData {
 	return ProductCatalogData{
-		Published:        types.BoolValue(n.Published),
-		HasStagedChanges: types.BoolValue(n.HasStagedChanges),
-		Current:          []ProductData{NewProductDataFromNative(n.Current)},
-		Staged:           []ProductData{NewProductDataFromNative(n.Staged)},
+		Published: types.BoolValue(n.Published),
+		Current:   []ProductData{NewProductDataFromNative(n.Current)},
 	}
 }
 

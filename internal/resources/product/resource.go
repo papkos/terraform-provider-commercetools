@@ -105,18 +105,9 @@ func (r *productResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 							Default:             booldefault.StaticBool(true),
 							Computed:            true,
 						},
-						"has_staged_changes": schema.BoolAttribute{
-							Optional:            true,
-							Computed:            true,
-							Description:         "true if the staged data is different from the current data.",
-							MarkdownDescription: "",
-							Validators:          nil,
-							PlanModifiers:       nil,
-						},
 					},
 					Blocks: map[string]schema.Block{
 						"current": productDataSchema("Current (published) data of the Product."),
-						"staged":  productDataSchema("Staged (unpublished) data of the Product."),
 					},
 					Validators:    nil,
 					PlanModifiers: nil,
