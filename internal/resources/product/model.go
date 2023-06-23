@@ -35,15 +35,21 @@ type Product struct {
 }
 
 func NewProductFromNative(n platform.Product) Product {
-	return Product{
+	product := Product{
 		ID:          types.StringValue(n.ID),
 		Key:         utils.FromOptionalString(n.Key),
 		Version:     types.Int64Value(int64(n.Version)),
 		ProductType: types.StringValue(n.ProductType.ID),
-		TaxCategory: types.StringValue(n.TaxCategory.ID),
+		TaxCategory: types.StringNull(),
 		PriceMode:   utils.FromOptionalString((*string)(n.PriceMode)),
 		MasterData:  []ProductCatalogData{NewProductCatalogDataFromNative(n.MasterData)},
 	}
+
+	if n.TaxCategory != nil {
+		product.TaxCategory = types.StringValue(n.TaxCategory.ID)
+	}
+
+	return product
 }
 
 //goland:noinspection GoNameStartsWithPackageName
@@ -110,7 +116,7 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 func (p Product) draft(ctx context.Context) platform.ProductDraft {
 	productData := p.MasterData[0].Current[0]
 
-	return platform.ProductDraft{
+	draft := platform.ProductDraft{
 		// TODO Is it OK to read the MasterData.Current ?
 		ProductType: platform.ProductTypeResourceIdentifier{ID: p.ProductType.ValueStringPointer()},
 		Name:        productData.Name.ValueLocalizedString(),
@@ -137,13 +143,18 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 		Variants: pie.Map(productData.Variants, func(variant ProductVariant) platform.ProductVariantDraft {
 			return variant.draftCreate(ctx)
 		}),
-		TaxCategory:    &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()},
+		TaxCategory:    nil,
 		SearchKeywords: nil,
 		State:          nil,
 		Publish:        p.MasterData[0].Published.ValueBoolPointer(),
 		PriceMode:      utils.Ref(platform.ProductPriceModeEnum(p.PriceMode.ValueString())),
 	}
 
+	if !p.TaxCategory.IsNull() {
+		draft.TaxCategory = &platform.TaxCategoryResourceIdentifier{ID: p.TaxCategory.ValueStringPointer()}
+	}
+
+	return draft
 }
 
 func (p Product) calculateUpdateActions(ctx context.Context, plan Product) platform.ProductUpdate {

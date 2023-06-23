@@ -2,7 +2,10 @@
 resource "commercetools_product" "{{ .Key }}" {
     key          = "{{ .Key }}"
     product_type = commercetools_product_type.{{ .ProductType.Key }}.id
+
+    {{ if gt (len .TaxCategory.Key) 0 }}
     tax_category = commercetools_tax_category.{{ .TaxCategory.Key }}.id
+    {{ end }}
 
     master_data {
         published = false

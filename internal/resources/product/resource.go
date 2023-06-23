@@ -68,7 +68,7 @@ func (r *productResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				PlanModifiers: nil,
 			},
 			"tax_category": schema.StringAttribute{
-				Required:      true,
+				Optional:      true,
 				Description:   "The ID of the TaxCategory of the Product.",
 				Validators:    nil, // TODO UUID?
 				PlanModifiers: nil,
