@@ -164,7 +164,16 @@ func (r *productResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	current := NewProductFromNative(*product)
+	productType, err := r.fetchProductType(ctx, product.ProductType.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading product's ProductType",
+			"Could not retrieve product type, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	current := NewProductFromNative(*product, *productType)
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, current)
@@ -196,7 +205,16 @@ func (r *productResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	current := NewProductFromNative(*product)
+	productType, err := r.fetchProductType(ctx, product.ProductType.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading product's ProductType",
+			"Could not retrieve product type, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	current := NewProductFromNative(*product, *productType)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &current)
@@ -239,7 +257,16 @@ func (r *productResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	current := NewProductFromNative(*product)
+	productType, err := r.fetchProductType(ctx, product.ProductType.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading product's ProductType",
+			"Could not retrieve product type, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	current := NewProductFromNative(*product, *productType)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &current)
@@ -274,4 +301,8 @@ func (r *productResource) Delete(ctx context.Context, req resource.DeleteRequest
 func (r *productResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Retrieve import ID and save to id attribute
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *productResource) fetchProductType(ctx context.Context, typeId string) (*platform.ProductType, error) {
+	return r.client.ProductTypes().WithId(typeId).Get().Execute(ctx)
 }

@@ -23,13 +23,13 @@ type ProductVariant struct {
 	Attributes ProductVariantAttributes `tfsdk:"attributes"` // of name -> ProductVariantAttributeValue
 }
 
-func NewProductVariantFromNative(n platform.ProductVariant) ProductVariant {
+func NewProductVariantFromNative(n platform.ProductVariant, productType platform.ProductType) ProductVariant {
 	return ProductVariant{
 		ID:         types.Int64Value(int64(n.ID)),
 		Key:        types.StringPointerValue(n.Key),
 		SKU:        types.StringPointerValue(n.Sku),
 		Prices:     pie.Map(n.Prices, NewProductVariantPriceFromNative),
-		Attributes: NewProductVariantAttributes(n.Attributes),
+		Attributes: NewProductVariantAttributes(n.Attributes, productType.Attributes),
 	}
 }
 
@@ -78,11 +78,20 @@ func (price ProductVariantPrice) ToNative() platform.PriceDraft {
 //goland:noinspection GoNameStartsWithPackageName
 type ProductVariantAttributes map[string]ProductVariantAttributeValue
 
-func NewProductVariantAttributes(n []platform.Attribute) ProductVariantAttributes {
+func NewProductVariantAttributes(n []platform.Attribute, attributeDefs []platform.AttributeDefinition) ProductVariantAttributes {
 	ret := make(ProductVariantAttributes, len(n))
 
+	attrDefsByName := map[string]platform.AttributeDefinition{}
+	for _, attrDef := range attributeDefs {
+		attrDefsByName[attrDef.Name] = attrDef
+	}
+
 	for _, attr := range n {
-		ret[attr.Name] = NewProductVariantAttributeValueFromNative(attr)
+		attrDef, ok := attrDefsByName[attr.Name]
+		if !ok {
+			panic(fmt.Sprintf("No attribute definition for attribute '%s' in ProductType", attr.Name))
+		}
+		ret[attr.Name] = NewProductVariantAttributeValueFromNative(attr, attrDef)
 	}
 
 	return ret
@@ -106,7 +115,7 @@ type ProductVariantAttributeValue struct {
 	PTReferenceValue   types.String                     `tfsdk:"product_type_reference_value"`
 }
 
-func NewProductVariantAttributeValueFromNative(n platform.Attribute) ProductVariantAttributeValue {
+func NewProductVariantAttributeValueFromNative(n platform.Attribute, def platform.AttributeDefinition) ProductVariantAttributeValue {
 	pva := ProductVariantAttributeValue{
 		// Initialize to respective null values
 		BoolValue:          types.BoolNull(),
@@ -115,24 +124,24 @@ func NewProductVariantAttributeValueFromNative(n platform.Attribute) ProductVari
 		PTReferenceValue:   types.StringNull(),
 	}
 
-	switch val := n.Value.(type) {
-	case bool:
-		pva.BoolValue = types.BoolValue(val)
-	case string:
-		pva.TextValue = types.StringValue(val)
-	case platform.LocalizedString:
-		pva.LocalizedTextValue = utils.FromLocalizedString(val)
-
-	// Complex value, dig deeper
-	case map[string]any:
-		if typeId, ok := val["typeId"]; ok {
-			// Probably a "reference" value, check what type it is referencing & set the relevant field
-			switch typeId {
-			case "product-type":
-				pva.PTReferenceValue = types.StringValue(val["id"].(string))
-			}
+	switch attrType := def.Type.(type) {
+	case platform.AttributeBooleanType:
+		pva.BoolValue = types.BoolValue(n.Value.(bool))
+	case platform.AttributeTextType:
+		pva.TextValue = types.StringValue(n.Value.(string))
+	case platform.AttributeLocalizableTextType:
+		lsValue := platform.LocalizedString{}
+		for k, v := range n.Value.(map[string]interface{}) {
+			lsValue[k] = v.(string)
+		}
+		pva.LocalizedTextValue = utils.FromLocalizedString(lsValue)
+	case platform.AttributeReferenceType:
+		switch attrType.ReferenceTypeId {
+		case platform.AttributeReferenceTypeIdProductType:
+			pva.PTReferenceValue = types.StringValue(n.Value.(map[string]any)["id"].(string))
 		}
 	}
+
 	return pva
 }
 

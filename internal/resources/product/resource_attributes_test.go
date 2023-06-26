@@ -180,7 +180,7 @@ func TestAccProduct_attributes_change(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.variant.#", "0"),
 
-					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.0.attribute.#", "3"),
+					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.0.attributes.%", "3"),
 				),
 			},
 		},

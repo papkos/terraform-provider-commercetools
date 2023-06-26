@@ -34,7 +34,7 @@ type Product struct {
 	MasterData []ProductCatalogData `tfsdk:"master_data"`
 }
 
-func NewProductFromNative(n platform.Product) Product {
+func NewProductFromNative(n platform.Product, productType platform.ProductType) Product {
 	product := Product{
 		ID:          types.StringValue(n.ID),
 		Key:         utils.FromOptionalString(n.Key),
@@ -42,7 +42,7 @@ func NewProductFromNative(n platform.Product) Product {
 		ProductType: types.StringValue(n.ProductType.ID),
 		TaxCategory: types.StringNull(),
 		PriceMode:   utils.FromOptionalString((*string)(n.PriceMode)),
-		MasterData:  []ProductCatalogData{NewProductCatalogDataFromNative(n.MasterData)},
+		MasterData:  []ProductCatalogData{NewProductCatalogDataFromNative(n.MasterData, productType)},
 	}
 
 	if n.TaxCategory != nil {
@@ -63,10 +63,10 @@ type ProductCatalogData struct {
 	// We don't care about Staged data
 }
 
-func NewProductCatalogDataFromNative(n platform.ProductCatalogData) ProductCatalogData {
+func NewProductCatalogDataFromNative(n platform.ProductCatalogData, productType platform.ProductType) ProductCatalogData {
 	return ProductCatalogData{
 		Published: types.BoolValue(n.Published),
-		Current:   []ProductData{NewProductDataFromNative(n.Current)},
+		Current:   []ProductData{NewProductDataFromNative(n.Current, productType)},
 	}
 }
 
@@ -86,7 +86,7 @@ type ProductData struct {
 	// TODO searchKeywords
 }
 
-func NewProductDataFromNative(n platform.ProductData) ProductData {
+func NewProductDataFromNative(n platform.ProductData, productType platform.ProductType) ProductData {
 	res := ProductData{
 		Name:        utils.FromLocalizedString(n.Name),
 		Categories:  types.ListNull(types.StringType),
@@ -95,8 +95,10 @@ func NewProductDataFromNative(n platform.ProductData) ProductData {
 		// MetaTitle:       utils.FromOptionalLocalizedString(n.MetaTitle),
 		// MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
 		// MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
-		MasterVariant: []ProductVariant{NewProductVariantFromNative(n.MasterVariant)},
-		Variants:      pie.Map(n.Variants, NewProductVariantFromNative),
+		MasterVariant: []ProductVariant{NewProductVariantFromNative(n.MasterVariant, productType)},
+		Variants: pie.Map(n.Variants, func(t platform.ProductVariant) ProductVariant {
+			return NewProductVariantFromNative(t, productType)
+		}),
 	}
 
 	// If the categories is empty we want to keep the value as null and not an empty
