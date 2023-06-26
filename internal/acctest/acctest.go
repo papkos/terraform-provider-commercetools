@@ -7,21 +7,22 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-	"github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
+	"github.com/hashicorp/terraform-plugin-mux/tf5to6server"
+	"github.com/hashicorp/terraform-plugin-mux/tf6muxserver"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 
 	"github.com/labd/terraform-provider-commercetools/commercetools"
 	"github.com/labd/terraform-provider-commercetools/internal/provider"
 )
 
-var ProtoV5ProviderFactories map[string]func() (tfprotov5.ProviderServer, error)
-var Provider tfprotov5.ProviderServer
+var ProtoV6ProviderFactories map[string]func() (tfprotov6.ProviderServer, error)
+var Provider tfprotov6.ProviderServer
 
 func init() {
-	ProtoV5ProviderFactories = protoV5ProviderFactoriesInit("commercetools")
-	newProvider := providerserver.NewProtocol5(provider.New("testing"))()
+	ProtoV6ProviderFactories = protoV6ProviderFactoriesInit("commercetools")
+	newProvider := providerserver.NewProtocol6(provider.New("testing"))()
 	if err := ConfigureProvider(newProvider); err != nil {
 		panic(err)
 	}
@@ -54,15 +55,21 @@ func init() {
 	if diags.HasError() {
 		panic(diags)
 	}
+	upgradedSdkProvider, err := tf5to6server.UpgradeServer(
+		context.Background(),
+		sdkProvider.GRPCProvider,
+	)
 
 	// Mux the new and the old provider
-	providers := []func() tfprotov5.ProviderServer{
-		func() tfprotov5.ProviderServer { return newProvider },
-		sdkProvider.GRPCProvider,
+	providers := []func() tfprotov6.ProviderServer{
+		func() tfprotov6.ProviderServer { return newProvider },
+		func() tfprotov6.ProviderServer {
+			return upgradedSdkProvider
+		},
 	}
 
 	ctx := context.Background()
-	muxServer, err := tf5muxserver.NewMuxServer(ctx, providers...)
+	muxServer, err := tf6muxserver.NewMuxServer(ctx, providers...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,12 +78,12 @@ func init() {
 
 }
 
-func protoV5ProviderFactoriesInit(providerNames ...string) map[string]func() (tfprotov5.ProviderServer, error) {
-	factories := make(map[string]func() (tfprotov5.ProviderServer, error), len(providerNames))
+func protoV6ProviderFactoriesInit(providerNames ...string) map[string]func() (tfprotov6.ProviderServer, error) {
+	factories := make(map[string]func() (tfprotov6.ProviderServer, error), len(providerNames))
 
 	for _, name := range providerNames {
 		if name == "commercetools" {
-			factories[name] = func() (tfprotov5.ProviderServer, error) {
+			factories[name] = func() (tfprotov6.ProviderServer, error) {
 				return Provider, nil
 			}
 		} else {
@@ -103,7 +110,7 @@ func TestAccPreCheck(t *testing.T) {
 	}
 }
 
-func ConfigureProvider(p tfprotov5.ProviderServer) error {
+func ConfigureProvider(p tfprotov6.ProviderServer) error {
 	testType := tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
 			"client_id":     tftypes.String,
@@ -124,12 +131,12 @@ func ConfigureProvider(p tfprotov5.ProviderServer) error {
 		"token_url":     tftypes.NewValue(tftypes.String, os.Getenv("CTP_AUTH_URL")),
 	})
 
-	testDynamicValue, err := tfprotov5.NewDynamicValue(testType, testValue)
+	testDynamicValue, err := tfprotov6.NewDynamicValue(testType, testValue)
 	if err != nil {
 		return err
 	}
 
-	_, err = p.ConfigureProvider(context.TODO(), &tfprotov5.ConfigureProviderRequest{
+	_, err = p.ConfigureProvider(context.TODO(), &tfprotov6.ConfigureProviderRequest{
 		TerraformVersion: "1.0.0",
 		Config:           &testDynamicValue,
 	})
