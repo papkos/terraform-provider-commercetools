@@ -8,6 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -22,6 +25,9 @@ func productVariantSchema() schema.NestedBlockObject {
 			"id": schema.Int64Attribute{
 				Computed:    true,
 				Description: "A unique, sequential identifier of the Product Variant within the Product.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"key": schema.StringAttribute{
 				Description: "User-defined unique identifier of the ProductVariant.\n\n" +
@@ -83,6 +89,9 @@ func productVariantSchema() schema.NestedBlockObject {
 						"id": schema.StringAttribute{
 							Computed:    true,
 							Description: "Unique identifier of this Price.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
 						},
 						"key": schema.StringAttribute{
 							Description: "User-defined unique identifier of the ProductVariant.\n\n" +
