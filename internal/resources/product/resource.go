@@ -89,9 +89,11 @@ func (r *productResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 				Description:         "Type of Price to be used when looking up a price for the Product.",
 				MarkdownDescription: "",
-				PlanModifiers:       nil,
-				Default:             stringdefault.StaticString(PriceModeEmbedded),
-				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Default:  stringdefault.StaticString(PriceModeEmbedded),
+				Computed: true,
 			},
 		},
 		Blocks: map[string]schema.Block{
