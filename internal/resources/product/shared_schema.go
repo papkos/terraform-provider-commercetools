@@ -52,18 +52,20 @@ func productDataSchema(description string) schema.Block {
 					//	stringvalidator.RegexMatches(regexp.MustCompile(`[a-zA-Z0-9_-]{2,256}`), ""),
 					// },
 				}),
-				"meta_title": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
-					Optional:    true,
-					Description: "Title of the Product displayed in search results.",
-				}),
-				"meta_description": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
-					Optional:    true,
-					Description: "Description of the Product displayed in search results below the meta title.",
-				}),
-				"meta_keywords": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
-					Optional:    true,
-					Description: "Keywords that give additional information about the Product to search engines.",
-				}),
+
+				// Ignore these fields for now, could be implemented later
+				// "meta_title": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
+				// 	Optional:    true,
+				// 	Description: "Title of the Product displayed in search results.",
+				// }),
+				// "meta_description": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
+				// 	Optional:    true,
+				// 	Description: "Description of the Product displayed in search results below the meta title.",
+				// }),
+				// "meta_keywords": customtypes.LocalizedString(customtypes.LocalizedStringOpts{
+				// 	Optional:    true,
+				// 	Description: "Keywords that give additional information about the Product to search engines.",
+				// }),
 				// TODO masterVariant is a hard link to a productVariant -- which may or may not be dependent on this product
 				// TODO variants is a list of productVariants -- use references?
 				// TODO searchKeywords is required, but it is just a JSON (with schema) https://docs.commercetools.com/api/projects/products#productdata

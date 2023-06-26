@@ -72,30 +72,31 @@ func NewProductCatalogDataFromNative(n platform.ProductCatalogData) ProductCatal
 
 //goland:noinspection GoNameStartsWithPackageName
 type ProductData struct {
-	Name            customtypes.LocalizedStringValue `tfsdk:"name"`
-	Categories      types.List                       `tfsdk:"categories"`
-	Description     customtypes.LocalizedStringValue `tfsdk:"description"`
-	Slug            customtypes.LocalizedStringValue `tfsdk:"slug"`
-	MetaTitle       customtypes.LocalizedStringValue `tfsdk:"meta_title"`
-	MetaDescription customtypes.LocalizedStringValue `tfsdk:"meta_description"`
-	MetaKeywords    customtypes.LocalizedStringValue `tfsdk:"meta_keywords"`
-	MasterVariant   []ProductVariant                 `tfsdk:"master_variant"`
-	Variants        []ProductVariant                 `tfsdk:"variant"`
+	Name        customtypes.LocalizedStringValue `tfsdk:"name"`
+	Categories  types.List                       `tfsdk:"categories"`
+	Description customtypes.LocalizedStringValue `tfsdk:"description"`
+	Slug        customtypes.LocalizedStringValue `tfsdk:"slug"`
+	// Ignore these fields for now, could be implemented later
+	// MetaTitle       customtypes.LocalizedStringValue `tfsdk:"meta_title"`
+	// MetaDescription customtypes.LocalizedStringValue `tfsdk:"meta_description"`
+	// MetaKeywords    customtypes.LocalizedStringValue `tfsdk:"meta_keywords"`
+	MasterVariant []ProductVariant `tfsdk:"master_variant"`
+	Variants      []ProductVariant `tfsdk:"variant"`
 	// TODO CategoryOrderHints
 	// TODO searchKeywords
 }
 
 func NewProductDataFromNative(n platform.ProductData) ProductData {
 	res := ProductData{
-		Name:            utils.FromLocalizedString(n.Name),
-		Categories:      types.ListNull(types.StringType),
-		Description:     utils.FromOptionalLocalizedString(n.Description),
-		Slug:            utils.FromLocalizedString(n.Slug),
-		MetaTitle:       utils.FromOptionalLocalizedString(n.MetaTitle),
-		MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
-		MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
-		MasterVariant:   []ProductVariant{NewProductVariantFromNative(n.MasterVariant)},
-		Variants:        pie.Map(n.Variants, NewProductVariantFromNative),
+		Name:        utils.FromLocalizedString(n.Name),
+		Categories:  types.ListNull(types.StringType),
+		Description: utils.FromOptionalLocalizedString(n.Description),
+		Slug:        utils.FromLocalizedString(n.Slug),
+		// MetaTitle:       utils.FromOptionalLocalizedString(n.MetaTitle),
+		// MetaDescription: utils.FromOptionalLocalizedString(n.MetaDescription),
+		// MetaKeywords:    utils.FromOptionalLocalizedString(n.MetaKeywords),
+		MasterVariant: []ProductVariant{NewProductVariantFromNative(n.MasterVariant)},
+		Variants:      pie.Map(n.Variants, NewProductVariantFromNative),
 	}
 
 	// If the categories is empty we want to keep the value as null and not an empty
@@ -136,10 +137,10 @@ func (p Product) draft(ctx context.Context) platform.ProductDraft {
 			return platform.CategoryResourceIdentifier{ID: &stringVal}
 		}),
 		CategoryOrderHints: nil,
-		MetaTitle:          productData.MetaTitle.ValueLocalizedStringRef(),
-		MetaDescription:    productData.MetaDescription.ValueLocalizedStringRef(),
-		MetaKeywords:       productData.MetaKeywords.ValueLocalizedStringRef(),
-		MasterVariant:      utils.Ref(productData.MasterVariant[0].draftCreate(ctx)),
+		// MetaTitle:          productData.MetaTitle.ValueLocalizedStringRef(),
+		// MetaDescription:    productData.MetaDescription.ValueLocalizedStringRef(),
+		// MetaKeywords:       productData.MetaKeywords.ValueLocalizedStringRef(),
+		MasterVariant: utils.Ref(productData.MasterVariant[0].draftCreate(ctx)),
 		Variants: pie.Map(productData.Variants, func(variant ProductVariant) platform.ProductVariantDraft {
 			return variant.draftCreate(ctx)
 		}),
