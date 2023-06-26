@@ -17,6 +17,6 @@ price {
 }
 {{ end }}
 
-{{ range $_, $attr := .AttributeConfigs }}
-{{ $attr }}
-{{ end }}
+    attributes = {
+        {{ .AttributesConfig }}
+    }

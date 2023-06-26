@@ -34,8 +34,8 @@ type productConfig struct {
 type variantConfig struct {
 	Sku              string
 	Prices           []priceConfig
-	Attributes       []product.ProductVariantAttribute
-	AttributeConfigs []string // Populated automatically
+	Attributes       product.ProductVariantAttributes
+	AttributesConfig string // Populated automatically
 }
 
 type priceConfig struct {
@@ -69,12 +69,12 @@ func testAccTaxCategoryConfig() taxCategoryConfig {
 	}
 }
 
-func testAccProductVariantAttributeConfig(pva product.ProductVariantAttribute) string {
-	return utils.HCLTemplateFiles("test_resources/product-variant-attribute.go.tf")(pva)
+func testAccProductVariantAttributesConfig(pva product.ProductVariantAttributes) string {
+	return utils.HCLTemplateFiles("test_resources/product-variant-attributes.go.tf")(pva)
 }
 
 func testAccProductVariantConfig(variant variantConfig) string {
-	variant.AttributeConfigs = pie.Map(variant.Attributes, testAccProductVariantAttributeConfig)
+	variant.AttributesConfig = testAccProductVariantAttributesConfig(variant.Attributes)
 
 	return utils.HCLTemplateFiles("test_resources/product-variant-body.go.tf")(variant)
 }

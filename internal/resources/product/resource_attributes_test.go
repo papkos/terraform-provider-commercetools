@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 
 	"github.com/labd/terraform-provider-commercetools/internal/acctest"
+	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
 	"github.com/labd/terraform-provider-commercetools/internal/resources/product"
 )
 
@@ -30,10 +32,10 @@ func TestAccProduct_attributes_create(t *testing.T) {
 					{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
 					{Curr: "NOK", Val: 2000, Country: "NO"},
 				},
-				Attributes: []product.ProductVariantAttribute{
-					{Name: types.StringValue("bool_attr_name"), BoolValue: types.BoolValue(true)},
-					{Name: types.StringValue("text_attr_name"), TextValue: types.StringValue("text attribute value")},
-					{Name: types.StringValue("pt_ref_attr_name"), PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Key))}, // These probably should be UUIDs...
+				Attributes: product.ProductVariantAttributes{
+					"bool_attr_name":   {BoolValue: types.BoolValue(true)},
+					"text_attr_name":   {TextValue: types.StringValue("text attribute value")},
+					"pt_ref_attr_name": {PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Key))},
 				},
 			},
 		},
@@ -85,10 +87,10 @@ func TestAccProduct_attributes_change(t *testing.T) {
 					{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
 					{Curr: "NOK", Val: 2000, Country: "NO"},
 				},
-				Attributes: []product.ProductVariantAttribute{
-					{Name: types.StringValue("bool_attr_name"), BoolValue: types.BoolValue(true)},
-					{Name: types.StringValue("text_attr_name"), TextValue: types.StringValue("text attribute value")},
-					{Name: types.StringValue("pt_ref_attr_name"), PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Key))}, // These probably should be UUIDs...
+				Attributes: product.ProductVariantAttributes{
+					"bool_attr_name":   {BoolValue: types.BoolValue(true)},
+					"text_attr_name":   {TextValue: types.StringValue("text attribute value")},
+					"pt_ref_attr_name": {PTReferenceValue: types.StringValue(fmt.Sprintf(`commercetools_product_type.%s.id`, productTypeConfigWithAttributes.Key))},
 				},
 			},
 		},
@@ -107,15 +109,34 @@ func TestAccProduct_attributes_change(t *testing.T) {
 					{Curr: "USD", Val: 1000, Country: "US", ValidFrom: "2023-09-15T12:34:56Z"},
 					{Curr: "NOK", Val: 2000, Country: "NO"},
 				},
-				Attributes: []product.ProductVariantAttribute{
-					{Name: types.StringValue("bool_attr_name"), BoolValue: types.BoolValue(false)},                              // changed to false
-					{Name: types.StringValue("text_attr_name"), TextValue: types.StringValue("text attribute value - CHANGED")}, // Changed
+				Attributes: product.ProductVariantAttributes{
+					"bool_attr_name": {BoolValue: types.BoolValue(true)},
+					"text_attr_name": {TextValue: types.StringValue("text attribute value")},
 					// product_type_attribute removed
 				},
 			},
 		},
 	}
 	step2Config := testAccProductConfig(step2)
+
+	step3 := productConfig{
+		ProductType: step2.ProductType,
+		TaxCategory: step2.TaxCategory,
+		Key:         step2.Key,
+		Name:        step2.Name,
+		Variants: []variantConfig{
+			{
+				Sku:    step2.Variants[0].Sku,
+				Prices: step2.Variants[0].Prices,
+				Attributes: product.ProductVariantAttributes{
+					"bool_attr_name":           {BoolValue: types.BoolValue(true)},
+					"text_attr_name":           {TextValue: types.StringValue("text attribute value")},
+					"localized_text_attr_name": {LocalizedTextValue: customtypes.NewLocalizedStringValue(map[string]attr.Value{"en-US": types.StringValue("ltext value")})},
+				},
+			},
+		},
+	}
+	step3Config := testAccProductConfig(step3)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { acctest.TestAccPreCheck(t) },
@@ -149,6 +170,17 @@ func TestAccProduct_attributes_change(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.name.en", name),
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.variant.#", "0"),
+				),
+			},
+			{
+				Config: step3Config,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "key", key),
+					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.name.en", name),
+					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.variant.#", "0"),
+
+					resource.TestCheckResourceAttr(resourceName, "master_data.0.current.0.master_variant.0.attribute.#", "3"),
 				),
 			},
 		},

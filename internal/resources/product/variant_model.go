@@ -16,11 +16,11 @@ import (
 
 //goland:noinspection GoNameStartsWithPackageName
 type ProductVariant struct {
-	ID         types.Int64               `tfsdk:"id"`
-	Key        types.String              `tfsdk:"key"`
-	SKU        types.String              `tfsdk:"sku"`
-	Prices     []ProductVariantPrice     `tfsdk:"price"`     // of ProductVariantPrice
-	Attributes []ProductVariantAttribute `tfsdk:"attribute"` // of ProductVariantAttribute
+	ID         types.Int64              `tfsdk:"id"`
+	Key        types.String             `tfsdk:"key"`
+	SKU        types.String             `tfsdk:"sku"`
+	Prices     []ProductVariantPrice    `tfsdk:"price"`      // of ProductVariantPrice
+	Attributes ProductVariantAttributes `tfsdk:"attributes"` // of name -> ProductVariantAttributeValue
 }
 
 func NewProductVariantFromNative(n platform.ProductVariant) ProductVariant {
@@ -29,7 +29,7 @@ func NewProductVariantFromNative(n platform.ProductVariant) ProductVariant {
 		Key:        types.StringPointerValue(n.Key),
 		SKU:        types.StringPointerValue(n.Sku),
 		Prices:     pie.Map(n.Prices, NewProductVariantPriceFromNative),
-		Attributes: pie.Map(n.Attributes, NewProductVariantAttributeFromNative),
+		Attributes: NewProductVariantAttributes(n.Attributes),
 	}
 }
 
@@ -76,19 +76,38 @@ func (price ProductVariantPrice) ToNative() platform.PriceDraft {
 }
 
 //goland:noinspection GoNameStartsWithPackageName
-type ProductVariantAttribute struct {
-	Name types.String `tfsdk:"name"`
+type ProductVariantAttributes map[string]ProductVariantAttributeValue
 
+func NewProductVariantAttributes(n []platform.Attribute) ProductVariantAttributes {
+	ret := make(ProductVariantAttributes, len(n))
+
+	for _, attr := range n {
+		ret[attr.Name] = NewProductVariantAttributeValueFromNative(attr)
+	}
+
+	return ret
+}
+
+func (pvas ProductVariantAttributes) ToNative() []platform.Attribute {
+	ret := make([]platform.Attribute, 0, len(pvas))
+
+	for name, val := range pvas {
+		ret = append(ret, platform.Attribute{Name: name, Value: val.ToNative()})
+	}
+
+	return ret
+}
+
+//goland:noinspection GoNameStartsWithPackageName
+type ProductVariantAttributeValue struct {
 	BoolValue          types.Bool                       `tfsdk:"bool_value"`
 	TextValue          types.String                     `tfsdk:"text_value"`
 	LocalizedTextValue customtypes.LocalizedStringValue `tfsdk:"localized_text_value"`
 	PTReferenceValue   types.String                     `tfsdk:"product_type_reference_value"`
 }
 
-func NewProductVariantAttributeFromNative(n platform.Attribute) ProductVariantAttribute {
-	pva := ProductVariantAttribute{
-		Name: types.StringValue(n.Name),
-
+func NewProductVariantAttributeValueFromNative(n platform.Attribute) ProductVariantAttributeValue {
+	pva := ProductVariantAttributeValue{
 		// Initialize to respective null values
 		BoolValue:          types.BoolNull(),
 		TextValue:          types.StringNull(),
@@ -117,23 +136,19 @@ func NewProductVariantAttributeFromNative(n platform.Attribute) ProductVariantAt
 	return pva
 }
 
-func (pva ProductVariantAttribute) ToNative() platform.Attribute {
-	attribute := platform.Attribute{
-		Name: pva.Name.ValueString(),
-	}
-
+func (pva ProductVariantAttributeValue) ToNative() any {
 	switch {
 	case !pva.BoolValue.IsNull():
-		attribute.Value = pva.BoolValue.ValueBool()
+		return pva.BoolValue.ValueBool()
 	case !pva.TextValue.IsNull():
-		attribute.Value = pva.TextValue.ValueString()
+		return pva.TextValue.ValueString()
 	case !pva.LocalizedTextValue.IsNull():
-		attribute.Value = pva.LocalizedTextValue.ValueLocalizedString()
+		return pva.LocalizedTextValue.ValueLocalizedString()
 	case !pva.PTReferenceValue.IsNull():
-		attribute.Value = platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
+		return platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
 	}
 
-	return attribute
+	return nil
 }
 
 // Same as draftAddNew, but uses a different type, and lacks a field: Staged
@@ -146,7 +161,7 @@ func (pv ProductVariant) draftCreate(ctx context.Context) platform.ProductVarian
 	}
 
 	if len(pv.Attributes) > 0 {
-		ret.Attributes = pie.Map(pv.Attributes, ProductVariantAttribute.ToNative)
+		ret.Attributes = pv.Attributes.ToNative()
 	}
 
 	if len(pv.Prices) > 0 {
@@ -169,7 +184,7 @@ func (pv ProductVariant) draftAddNew(ctx context.Context) platform.ProductAddVar
 	}
 
 	if len(pv.Attributes) > 0 {
-		ret.Attributes = pie.Map(pv.Attributes, ProductVariantAttribute.ToNative)
+		ret.Attributes = pv.Attributes.ToNative()
 	}
 
 	if len(pv.Prices) > 0 {
@@ -215,28 +230,28 @@ func (pv ProductVariant) calculateUpdateActions(plan ProductVariant) []platform.
 
 	// setAttribute
 	// Attributes can be added, removed or changed. There is no "setAttributes" action that would replace all at once.
-	stateAttributesByName := map[string]ProductVariantAttribute{}
-	for _, sa := range pv.Attributes {
-		stateAttributesByName[sa.Name.ValueString()] = sa
+	stateAttributeNames := map[string]struct{}{}
+	for sName := range pv.Attributes {
+		stateAttributeNames[sName] = struct{}{}
 	}
 
-	for _, pa := range plan.Attributes {
+	for pName, pValue := range plan.Attributes {
 		ret = append(ret, platform.ProductSetAttributeAction{
 			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
-			Name:      pa.Name.ValueString(),
-			Value:     pa.ToNative().Value,
+			Name:      pName,
+			Value:     pValue.ToNative(),
 			// If true, only the staged description is updated. If false, both the current and staged description are updated.
 			// Default: true
 			Staged: utils.Ref(false),
 		})
-		delete(stateAttributesByName, pa.Name.ValueString())
+		delete(stateAttributeNames, pName)
 	}
 
 	// The ones left in this map are not part of the plan, thus need to be removed
-	for _, sa := range stateAttributesByName {
+	for sName := range stateAttributeNames {
 		ret = append(ret, platform.ProductSetAttributeAction{
 			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
-			Name:      sa.Name.ValueString(),
+			Name:      sName,
 			Value:     nil, // Nil removes the value
 			// If true, only the staged description is updated. If false, both the current and staged description are updated.
 			// Default: true

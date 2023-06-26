@@ -37,16 +37,11 @@ func productVariantSchema() schema.NestedBlockObject {
 				Description: "User-defined unique SKU of the Product Variant.",
 				Optional:    true,
 			},
-		},
-		Blocks: map[string]schema.Block{
-			"attribute": schema.SetNestedBlock{
-				Description: "Attributes of the Product Variant.",
-				NestedObject: schema.NestedBlockObject{
+			"attributes": schema.MapNestedAttribute{
+				Description: "Attributes of the Product Variant. The map key is the name of the attribute",
+				Optional:    true,
+				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Description: "Name of the Attribute.",
-							Required:    true,
-						},
 						"bool_value": schema.BoolAttribute{
 							Optional:    true,
 							Description: "Use this to provide value to bool type attribute",
@@ -74,11 +69,10 @@ func productVariantSchema() schema.NestedBlockObject {
 						//	path.MatchRoot("product_type_reference_value"),
 						// ),
 					},
-					PlanModifiers: nil,
 				},
-				Validators:    nil,
-				PlanModifiers: nil,
 			},
+		},
+		Blocks: map[string]schema.Block{
 			"price": schema.ListNestedBlock{
 				Description: "The Embedded Prices for the Product Variant. " +
 					"Each Price must have its unique Price scope " +

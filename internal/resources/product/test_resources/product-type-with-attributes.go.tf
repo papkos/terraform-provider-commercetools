@@ -1,6 +1,6 @@
 resource "commercetools_product_type" "{{ .key }}" {
-    key         = "{{ .key }}"
-    name        = "TF ACCTEST Some generic product properties"
+    key  = "{{ .key }}"
+    name = "TF ACCTEST Some generic product properties"
 
     attribute {
         name = "bool_attr_name"
@@ -42,6 +42,20 @@ resource "commercetools_product_type" "{{ .key }}" {
         type {
             name              = "reference"
             reference_type_id = "product-type"
+        }
+    }
+
+    attribute {
+        name = "localized_text_attr_name"
+
+        constraint = "None"
+        label      = {
+            en-US = "A TF test Localized Text attribute"
+        }
+        required   = false
+        searchable = false
+        type {
+            name = "ltext"
         }
     }
 }
