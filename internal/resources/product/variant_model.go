@@ -98,6 +98,10 @@ func NewProductVariantAttributes(n []platform.Attribute, attributeDefs []platfor
 }
 
 func (pvas ProductVariantAttributes) ToNative() []platform.Attribute {
+	if len(pvas) == 0 {
+		return nil
+	}
+
 	ret := make([]platform.Attribute, 0, len(pvas))
 
 	for name, val := range pvas {
@@ -166,11 +170,7 @@ func (pv ProductVariant) draftCreate(ctx context.Context) platform.ProductVarian
 		Sku:        pv.SKU.ValueStringPointer(),
 		Key:        pv.Key.ValueStringPointer(),
 		Prices:     nil,
-		Attributes: nil,
-	}
-
-	if len(pv.Attributes) > 0 {
-		ret.Attributes = pv.Attributes.ToNative()
+		Attributes: pv.Attributes.ToNative(),
 	}
 
 	if len(pv.Prices) > 0 {
@@ -186,14 +186,10 @@ func (pv ProductVariant) draftAddNew(ctx context.Context) platform.ProductAddVar
 		Sku:        pv.SKU.ValueStringPointer(),
 		Key:        pv.Key.ValueStringPointer(),
 		Prices:     nil,
-		Attributes: nil,
+		Attributes: pv.Attributes.ToNative(),
 		// If true, only the staged description is updated. If false, both the current and staged description are updated.
 		// Default: true
 		Staged: utils.Ref(false),
-	}
-
-	if len(pv.Attributes) > 0 {
-		ret.Attributes = pv.Attributes.ToNative()
 	}
 
 	if len(pv.Prices) > 0 {
