@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/labd/commercetools-go-sdk/platform"
 
@@ -242,6 +243,10 @@ func (r *productResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	input := state.calculateUpdateActions(ctx, plan)
+	tflog.Warn(ctx, "Update actions for Product", map[string]interface{}{
+		"product":       plan.Key.ValueString(),
+		"updateActions": input,
+	})
 	var product *platform.Product
 
 	err := retry.RetryContext(ctx, 5*time.Second, func() *retry.RetryError {
@@ -304,5 +309,15 @@ func (r *productResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 func (r *productResource) fetchProductType(ctx context.Context, typeId string) (*platform.ProductType, error) {
-	return r.client.ProductTypes().WithId(typeId).Get().Execute(ctx)
+	result, err := r.client.ProductTypes().WithId(typeId).Get().Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tflog.Warn(ctx, "Resolved ProductTypeId to ProductType", map[string]interface{}{
+		"productTypeId": typeId,
+		"productType":   result,
+	})
+
+	return result, err
 }

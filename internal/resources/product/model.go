@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/labd/commercetools-go-sdk/platform"
 
 	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
@@ -250,7 +251,13 @@ func (p Product) calculateUpdateActions(ctx context.Context, plan Product) platf
 
 	stateMasterVariant := p.MasterData[0].Current[0].MasterVariant[0]
 	planMasterVariant := plan.MasterData[0].Current[0].MasterVariant[0]
-	result.Actions = append(result.Actions, stateMasterVariant.calculateUpdateActions(planMasterVariant)...)
+	masterVariantUpdates := stateMasterVariant.calculateUpdateActions(planMasterVariant)
+	tflog.Warn(ctx, "Update actions for Product Master variant", map[string]interface{}{
+		"product":       p.Key.ValueString(),
+		"variant":       stateMasterVariant.ID.ValueInt64(),
+		"updateActions": masterVariantUpdates,
+	})
+	result.Actions = append(result.Actions, masterVariantUpdates...)
 
 	// Extra variants
 	// Variants can be added, removed or changed.
@@ -262,9 +269,20 @@ func (p Product) calculateUpdateActions(ctx context.Context, plan Product) platf
 	for _, pv := range plan.MasterData[0].Current[0].Variants {
 		sv, ok := stateVariantsById[pv.ID.ValueInt64()]
 		if !ok {
-			result.Actions = append(result.Actions, pv.draftAddNew(ctx))
+			addAction := pv.draftAddNew(ctx)
+			tflog.Warn(ctx, "Create new variant for Product", map[string]interface{}{
+				"product":   p.Key.ValueString(),
+				"addAction": addAction,
+			})
+			result.Actions = append(result.Actions, addAction)
 		} else {
-			result.Actions = append(result.Actions, pv.calculateUpdateActions(sv)...)
+			updateActions := sv.calculateUpdateActions(pv)
+			tflog.Warn(ctx, "Update actions for Product variant", map[string]interface{}{
+				"product":       p.Key.ValueString(),
+				"variant":       sv.ID.ValueInt64(),
+				"updateActions": updateActions,
+			})
+			result.Actions = append(result.Actions, updateActions...)
 			delete(stateVariantsById, sv.ID.ValueInt64())
 		}
 	}
