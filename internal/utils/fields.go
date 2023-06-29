@@ -34,13 +34,17 @@ func FromOptionalString(value *string) basetypes.StringValue {
 	return types.StringValue(*value)
 
 }
+
 func FromOptionalLocalizedString(value *platform.LocalizedString) customtypes.LocalizedStringValue {
 	if value == nil {
 		return customtypes.NewLocalizedStringNull()
 	}
 
-	result := make(map[string]attr.Value, len(*value))
-	for k, v := range *value {
+	return FromLocalizedString(*value)
+}
+func FromLocalizedString(value platform.LocalizedString) customtypes.LocalizedStringValue {
+	result := make(map[string]attr.Value, len(value))
+	for k, v := range value {
 		result[k] = types.StringValue(v)
 	}
 	return customtypes.NewLocalizedStringValue(result)
@@ -76,4 +80,8 @@ func IntRef(value any) *int {
 func BoolRef(value any) *bool {
 	result := value.(bool)
 	return &result
+}
+
+func Ref[T any](val T) *T {
+	return &val
 }

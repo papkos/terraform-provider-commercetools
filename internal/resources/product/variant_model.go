@@ -1,0 +1,295 @@
+package product
+
+import (
+	"context"
+	"fmt"
+	"reflect"
+	"time"
+
+	"github.com/elliotchance/pie/v2"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/labd/commercetools-go-sdk/platform"
+
+	"github.com/labd/terraform-provider-commercetools/internal/customtypes"
+	"github.com/labd/terraform-provider-commercetools/internal/utils"
+)
+
+//goland:noinspection GoNameStartsWithPackageName
+type ProductVariant struct {
+	ID         types.Int64              `tfsdk:"id"`
+	Key        types.String             `tfsdk:"key"`
+	SKU        types.String             `tfsdk:"sku"`
+	Prices     []ProductVariantPrice    `tfsdk:"price"`      // of ProductVariantPrice
+	Attributes ProductVariantAttributes `tfsdk:"attributes"` // of name -> ProductVariantAttributeValue
+}
+
+func NewProductVariantFromNative(n platform.ProductVariant, productType platform.ProductType) ProductVariant {
+	return ProductVariant{
+		ID:         types.Int64Value(int64(n.ID)),
+		Key:        types.StringPointerValue(n.Key),
+		SKU:        types.StringPointerValue(n.Sku),
+		Prices:     pie.Map(n.Prices, NewProductVariantPriceFromNative),
+		Attributes: NewProductVariantAttributes(n.Attributes, productType.Attributes),
+	}
+}
+
+//goland:noinspection GoNameStartsWithPackageName
+type ProductVariantPrice struct {
+	ID         types.String              `tfsdk:"id"`
+	Key        types.String              `tfsdk:"key"`
+	Value      []customtypes.SimpleMoney `tfsdk:"value"`
+	Country    types.String              `tfsdk:"country"`
+	ValidFrom  types.String              `tfsdk:"valid_from"`
+	ValidUntil types.String              `tfsdk:"valid_until"`
+}
+
+func NewProductVariantPriceFromNative(n platform.Price) ProductVariantPrice {
+	return ProductVariantPrice{
+		ID:         types.StringValue(n.ID),
+		Key:        types.StringPointerValue(n.Key),
+		Value:      []customtypes.SimpleMoney{customtypes.SimpleMoneyFromTypedMoney(n.Value)},
+		Country:    types.StringPointerValue(n.Country),
+		ValidFrom:  types.StringPointerValue(flattenDateTime(n.ValidFrom)),
+		ValidUntil: types.StringPointerValue(flattenDateTime(n.ValidUntil)),
+	}
+}
+
+func (price ProductVariantPrice) ToNative() platform.PriceDraft {
+	validFrom, err := parseDateTime(price.ValidFrom.ValueStringPointer())
+	if err != nil {
+		// TODO How to signal error?
+		return platform.PriceDraft{}
+	}
+
+	validUntil, err := parseDateTime(price.ValidUntil.ValueStringPointer())
+	if err != nil {
+		// TODO How to signal error?
+		return platform.PriceDraft{}
+	}
+	return platform.PriceDraft{
+		Key:        price.Key.ValueStringPointer(),
+		Value:      price.Value[0].ToNative(),
+		Country:    price.Country.ValueStringPointer(),
+		ValidFrom:  validFrom,
+		ValidUntil: validUntil,
+	}
+}
+
+//goland:noinspection GoNameStartsWithPackageName
+type ProductVariantAttributes map[string]ProductVariantAttributeValue
+
+func NewProductVariantAttributes(n []platform.Attribute, attributeDefs []platform.AttributeDefinition) ProductVariantAttributes {
+	ret := make(ProductVariantAttributes, len(n))
+
+	attrDefsByName := map[string]platform.AttributeDefinition{}
+	for _, attrDef := range attributeDefs {
+		attrDefsByName[attrDef.Name] = attrDef
+	}
+
+	for _, attr := range n {
+		attrDef, ok := attrDefsByName[attr.Name]
+		if !ok {
+			panic(fmt.Sprintf("No attribute definition for attribute '%s' in ProductType", attr.Name))
+		}
+		ret[attr.Name] = NewProductVariantAttributeValueFromNative(attr, attrDef)
+	}
+
+	return ret
+}
+
+func (pvas ProductVariantAttributes) ToNative() []platform.Attribute {
+	if len(pvas) == 0 {
+		return nil
+	}
+
+	ret := make([]platform.Attribute, 0, len(pvas))
+
+	for name, val := range pvas {
+		ret = append(ret, platform.Attribute{Name: name, Value: val.ToNative()})
+	}
+
+	return ret
+}
+
+//goland:noinspection GoNameStartsWithPackageName
+type ProductVariantAttributeValue struct {
+	BoolValue          types.Bool                       `tfsdk:"bool_value"`
+	TextValue          types.String                     `tfsdk:"text_value"`
+	LocalizedTextValue customtypes.LocalizedStringValue `tfsdk:"localized_text_value"`
+	PTReferenceValue   types.String                     `tfsdk:"product_type_reference_value"`
+}
+
+func NewProductVariantAttributeValueFromNative(n platform.Attribute, def platform.AttributeDefinition) ProductVariantAttributeValue {
+	pva := ProductVariantAttributeValue{
+		// Initialize to respective null values
+		BoolValue:          types.BoolNull(),
+		TextValue:          types.StringNull(),
+		LocalizedTextValue: customtypes.NewLocalizedStringNull(),
+		PTReferenceValue:   types.StringNull(),
+	}
+
+	switch attrType := def.Type.(type) {
+	case platform.AttributeBooleanType:
+		pva.BoolValue = types.BoolValue(n.Value.(bool))
+	case platform.AttributeTextType:
+		pva.TextValue = types.StringValue(n.Value.(string))
+	case platform.AttributeLocalizableTextType:
+		lsValue := platform.LocalizedString{}
+		for k, v := range n.Value.(map[string]interface{}) {
+			lsValue[k] = v.(string)
+		}
+		pva.LocalizedTextValue = utils.FromLocalizedString(lsValue)
+	case platform.AttributeReferenceType:
+		switch attrType.ReferenceTypeId {
+		case platform.AttributeReferenceTypeIdProductType:
+			pva.PTReferenceValue = types.StringValue(n.Value.(map[string]any)["id"].(string))
+		}
+	}
+
+	return pva
+}
+
+func (pva ProductVariantAttributeValue) ToNative() any {
+	switch {
+	case !pva.BoolValue.IsNull():
+		return pva.BoolValue.ValueBool()
+	case !pva.TextValue.IsNull():
+		return pva.TextValue.ValueString()
+	case !pva.LocalizedTextValue.IsNull():
+		return pva.LocalizedTextValue.ValueLocalizedString()
+	case !pva.PTReferenceValue.IsNull():
+		return platform.ProductTypeReference{ID: pva.PTReferenceValue.ValueString()}
+	}
+
+	return nil
+}
+
+// Same as draftAddNew, but uses a different type, and lacks a field: Staged
+func (pv ProductVariant) draftCreate(ctx context.Context) platform.ProductVariantDraft {
+	ret := platform.ProductVariantDraft{
+		Sku:        pv.SKU.ValueStringPointer(),
+		Key:        pv.Key.ValueStringPointer(),
+		Prices:     nil,
+		Attributes: pv.Attributes.ToNative(),
+	}
+
+	if len(pv.Prices) > 0 {
+		ret.Prices = pie.Map(pv.Prices, ProductVariantPrice.ToNative)
+	}
+
+	return ret
+}
+
+// Same as draftCreate, but uses a different type, and has an extra field: Staged
+func (pv ProductVariant) draftAddNew(ctx context.Context) platform.ProductAddVariantAction {
+	ret := platform.ProductAddVariantAction{
+		Sku:        pv.SKU.ValueStringPointer(),
+		Key:        pv.Key.ValueStringPointer(),
+		Prices:     nil,
+		Attributes: pv.Attributes.ToNative(),
+		// If true, only the staged description is updated. If false, both the current and staged description are updated.
+		// Default: true
+		Staged: utils.Ref(false),
+	}
+
+	if len(pv.Prices) > 0 {
+		ret.Prices = pie.Map(pv.Prices, ProductVariantPrice.ToNative)
+	}
+
+	return ret
+}
+
+func (pv ProductVariant) calculateUpdateActions(plan ProductVariant) []platform.ProductUpdateAction {
+	var ret []platform.ProductUpdateAction
+
+	// Variant-related actions
+	// Ref: https://docs.commercetools.com/api/projects/products#update-actions
+
+	// setSku
+	if !pv.SKU.Equal(plan.SKU) {
+		var value *string
+		if !plan.SKU.IsNull() && !plan.SKU.IsUnknown() {
+			value = plan.SKU.ValueStringPointer()
+		}
+		ret = append(ret, platform.ProductSetSkuAction{
+			VariantId: int(pv.ID.ValueInt64()),
+			Sku:       value,
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setPrices
+	// Trying to get away cheap, instead of only changing what actually changed (comparing prices by their ID),
+	// see if there's any difference, and completely replace all the prices
+	if !reflect.DeepEqual(pv.Prices, plan.Prices) {
+		ret = append(ret, platform.ProductSetPricesAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Prices:    pie.Map(plan.Prices, ProductVariantPrice.ToNative),
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	// setAttribute
+	// Attributes can be added, removed or changed. There is no "setAttributes" action that would replace all at once.
+	stateAttributeNames := map[string]struct{}{}
+	for sName := range pv.Attributes {
+		stateAttributeNames[sName] = struct{}{}
+	}
+
+	for pName, pValue := range plan.Attributes {
+		ret = append(ret, platform.ProductSetAttributeAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Name:      pName,
+			Value:     pValue.ToNative(),
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+		delete(stateAttributeNames, pName)
+	}
+
+	// The ones left in this map are not part of the plan, thus need to be removed
+	for sName := range stateAttributeNames {
+		ret = append(ret, platform.ProductSetAttributeAction{
+			VariantId: utils.Ref(int(pv.ID.ValueInt64())),
+			Name:      sName,
+			Value:     nil, // Nil removes the value
+			// If true, only the staged description is updated. If false, both the current and staged description are updated.
+			// Default: true
+			Staged: utils.Ref(false),
+		})
+	}
+
+	return ret
+}
+
+func parseDateTime(s *string, def ...time.Time) (*time.Time, error) {
+	if s == nil {
+		if len(def) > 0 {
+			return &def[0], nil
+		} else {
+			return nil, nil
+		}
+	}
+
+	dt, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse as RFC3339: %w", err)
+	}
+
+	return &dt, nil
+}
+
+func flattenDateTime(dt *time.Time) *string {
+	if dt == nil {
+		return nil
+	}
+
+	formatted := (*dt).Format(time.RFC3339)
+
+	return &formatted
+}

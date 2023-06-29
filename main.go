@@ -7,9 +7,10 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov5/tf5server"
-	"github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6/tf6server"
+	"github.com/hashicorp/terraform-plugin-mux/tf5to6server"
+	"github.com/hashicorp/terraform-plugin-mux/tf6muxserver"
 
 	"github.com/labd/terraform-provider-commercetools/commercetools"
 	"github.com/labd/terraform-provider-commercetools/internal/provider"
@@ -39,24 +40,30 @@ func main() {
 	fullVersion := fmt.Sprintf("%s (%s)", version, commit)
 
 	sdkProvider := commercetools.New(fullVersion)
+	upgradedSdkProvider, err := tf5to6server.UpgradeServer(
+		context.Background(),
+		sdkProvider().GRPCProvider,
+	)
 
 	ctx := context.Background()
-	providers := []func() tfprotov5.ProviderServer{
-		providerserver.NewProtocol5(provider.New(fullVersion)),
-		sdkProvider().GRPCProvider,
+	providers := []func() tfprotov6.ProviderServer{
+		providerserver.NewProtocol6(provider.New(fullVersion)),
+		func() tfprotov6.ProviderServer {
+			return upgradedSdkProvider
+		},
 	}
 
-	muxServer, err := tf5muxserver.NewMuxServer(ctx, providers...)
+	muxServer, err := tf6muxserver.NewMuxServer(ctx, providers...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var serveOpts []tf5server.ServeOpt
+	var serveOpts []tf6server.ServeOpt
 	if *debugFlag {
-		serveOpts = append(serveOpts, tf5server.WithManagedDebug())
+		serveOpts = append(serveOpts, tf6server.WithManagedDebug())
 	}
 
-	err = tf5server.Serve(
+	err = tf6server.Serve(
 		"registry.terraform.io/labd/commercetools",
 		muxServer.ProviderServer,
 		serveOpts...,

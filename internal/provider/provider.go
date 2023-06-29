@@ -17,6 +17,7 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 
 	custom_type "github.com/labd/terraform-provider-commercetools/internal/datasource/type"
+	"github.com/labd/terraform-provider-commercetools/internal/resources/product"
 	"github.com/labd/terraform-provider-commercetools/internal/resources/project"
 	"github.com/labd/terraform-provider-commercetools/internal/resources/state"
 	"github.com/labd/terraform-provider-commercetools/internal/resources/state_transition"
@@ -190,5 +191,6 @@ func (p *ctProvider) Resources(_ context.Context) []func() resource.Resource {
 		project.NewResource,
 		state.NewResource,
 		state_transition.NewResource,
+		product.NewResource,
 	}
 }
